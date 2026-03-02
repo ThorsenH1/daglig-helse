@@ -1,10 +1,10 @@
 /* =========================================
    DAGLIG HELSE – App Logic
-   Versjon 2.1.0
+    Versjon 2.1.1
    For besteforeldre / eldre brukere
    ========================================= */
 
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.1.1';
 const ADMIN_EMAIL = 'halvor.thorsenh1@gmail.com';
 let isAdmin = false;
 
@@ -2193,9 +2193,10 @@ document.addEventListener('click', (e) => {
 function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
         // Registrer caching service worker
-        navigator.serviceWorker.register('sw.js')
+        navigator.serviceWorker.register('sw.js?v=2.1.1', { updateViaCache: 'none' })
             .then(reg => {
                 console.log('[SW] Cache-worker registrert:', reg.scope);
+                reg.update();
             })
             .catch(err => {
                 console.log('[SW] Cache-worker registrering feilet:', err);
