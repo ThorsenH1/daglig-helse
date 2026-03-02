@@ -1,0 +1,8 @@
+{
+    "name": "daglig-helse",
+    "version": "1.0.0",
+    "description": "Enkel helseapp for besteforeldre",
+    "dependencies": {
+        "firebase": "^10.7.1"
+    }
+}

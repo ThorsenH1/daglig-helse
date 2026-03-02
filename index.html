@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Daglig Helse – For Besteforeldre</title>
+    
+    <!-- PWA Meta -->
+    <meta name="theme-color" content="#2E7D9B">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Daglig Helse">
+    <meta name="description" content="Enkel helseapp for besteforeldre – spor vann, medisin, toalettbesøk og mer">
+    
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css?v=1.0">
+</head>
+<body>
+
+    <!-- ============ INNLASTINGSSKJERM ============ -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <div class="loading-icon">❤️</div>
+            <h1>Daglig Helse</h1>
+            <p>Laster inn...</p>
+            <div class="loading-spinner"></div>
+        </div>
+    </div>
+
+    <!-- ============ INNLOGGINGSSKJERM ============ -->
+    <section id="login-view" class="view" style="display:none;">
+        <div class="login-container">
+            <div class="login-logo">❤️</div>
+            <h1>Daglig Helse</h1>
+            <p class="login-subtitle">Din daglige helseassistent</p>
+            <p class="login-description">Hold oversikt over vann, medisin, toalettbesøk og mye mer – enkelt og trygt.</p>
+            <button id="btn-google-login" class="btn btn-login" onclick="signInWithGoogle()">
+                <span class="btn-icon">🔑</span>
+                Logg inn med Google
+            </button>
+            <p class="login-help">Trykk på knappen over for å logge inn med din Google-konto. Dataene dine lagres trygt i skyen.</p>
+        </div>
+    </section>
+
+    <!-- ============ HOVEDAPP ============ -->
+    <div id="app-container" style="display:none;">
+
+        <!-- TOPPLINJE -->
+        <header id="app-header">
+            <div class="header-left">
+                <div id="header-greeting" class="header-greeting">God dag!</div>
+                <div id="header-date" class="header-date"></div>
+            </div>
+            <div class="header-right">
+                <button class="btn-icon-only" onclick="showView('settings')" title="Innstillinger">⚙️</button>
+                <button class="btn-icon-only" onclick="handleSignOut()" title="Logg ut">🚪</button>
+            </div>
+        </header>
+
+        <!-- ============ HJEM / DASHBOARD ============ -->
+        <section id="home-view" class="view app-view">
+            <div class="view-content">
+                <!-- Klokke -->
+                <div class="clock-card">
+                    <div id="clock-time" class="clock-time">--:--</div>
+                    <div id="clock-date" class="clock-date"></div>
+                </div>
+
+                <!-- Daglig innsjekk -->
+                <div id="checkin-card" class="checkin-card" style="display:none;">
+                    <h3>🌅 Daglig innsjekk</h3>
+                    <p>Hvordan har du det i dag?</p>
+                    <button class="btn btn-checkin" onclick="dailyCheckIn()">
+                        ✅ Jeg har det bra!
+                    </button>
+                </div>
+
+                <!-- Dagens sammendrag -->
+                <h2 class="section-title">📊 Dagens oversikt</h2>
+                <div class="summary-grid">
+                    <div class="summary-card" onclick="showView('water')">
+                        <div class="summary-icon">💧</div>
+                        <div class="summary-label">Vann</div>
+                        <div class="summary-value" id="home-water-count">0</div>
+                        <div class="summary-goal" id="home-water-goal">Mål: 8 glass</div>
+                        <div class="summary-progress">
+                            <div class="progress-bar" id="home-water-progress"></div>
+                        </div>
+                    </div>
+                    <div class="summary-card" onclick="showView('bathroom')">
+                        <div class="summary-icon">🚽</div>
+                        <div class="summary-label">Siste dobesøk</div>
+                        <div class="summary-value" id="home-bathroom-last">Ingen i dag</div>
+                        <div class="summary-goal" id="home-bathroom-count">0 besøk i dag</div>
+                    </div>
+                    <div class="summary-card" onclick="showView('medicine')">
+                        <div class="summary-icon">💊</div>
+                        <div class="summary-label">Medisiner</div>
+                        <div class="summary-value" id="home-medicine-status">–</div>
+                        <div class="summary-goal" id="home-medicine-detail"></div>
+                        <div class="summary-progress">
+                            <div class="progress-bar" id="home-medicine-progress"></div>
+                        </div>
+                    </div>
+                    <div class="summary-card" onclick="showView('health')">
+                        <div class="summary-icon">❤️</div>
+                        <div class="summary-label">Helse</div>
+                        <div class="summary-value" id="home-health-mood">Ikke registrert</div>
+                        <div class="summary-goal" id="home-health-detail"></div>
+                    </div>
+                </div>
+
+                <!-- Hurtigknapper -->
+                <h2 class="section-title">⚡ Hurtigknapper</h2>
+                <div class="quick-actions">
+                    <button class="btn btn-quick" onclick="quickAddWater()">
+                        💧 Drakk et glass vann
+                    </button>
+                    <button class="btn btn-quick" onclick="quickLogBathroom()">
+                        🚽 Var på do
+                    </button>
+                    <button class="btn btn-quick" onclick="showView('medicine')">
+                        💊 Tok medisin
+                    </button>
+                </div>
+
+                <!-- Kommende påminnelser -->
+                <h2 class="section-title">🔔 Påminnelser</h2>
+                <div id="home-reminders" class="reminders-list">
+                    <p class="empty-state">Ingen aktive påminnelser</p>
+                </div>
+
+                <!-- Mer-meny -->
+                <h2 class="section-title">📋 Mer</h2>
+                <div class="more-menu-grid">
+                    <button class="btn btn-more-menu" onclick="showView('sleep')">
+                        😴 Søvn
+                    </button>
+                    <button class="btn btn-more-menu" onclick="showView('movement')">
+                        🚶 Bevegelse
+                    </button>
+                    <button class="btn btn-more-menu" onclick="showView('diary')">
+                        📝 Dagbok
+                    </button>
+                    <button class="btn btn-more-menu" onclick="showView('shopping')">
+                        🛒 Handleliste
+                    </button>
+                    <button class="btn btn-more-menu" onclick="showView('history')">
+                        📅 Historikk
+                    </button>
+                    <button class="btn btn-more-menu" onclick="showView('emergency')">
+                        🆘 Nødkontakter
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ VANNINNTAK ============ -->
+        <section id="water-view" class="view app-view" style="display:none;">
+            <div class="view-header">
+                <button class="btn-back" onclick="showView('home')">← Tilbake</button>
+                <h1>💧 Vanninntak</h1>
+            </div>
+            <div class="view-content">
+                <div class="water-display">
+                    <div class="water-count-big" id="water-count-display">0</div>
+                    <div class="water-label">glass i dag</div>
+                    <div class="water-goal-text" id="water-goal-text">Mål: 8 glass</div>
+                    <div class="progress-bar-large">
+                        <div class="progress-fill" id="water-progress-fill"></div>
+                    </div>
+                </div>
+                
+                <div class="water-glasses" id="water-glasses-visual"></div>
+
+                <div class="water-buttons">
+                    <button class="btn btn-water-remove" onclick="removeWater()">
+                        ➖ Fjern glass
+                    </button>
+                    <button class="btn btn-water-add" onclick="addWater()">
+                        ➕ Legg til glass
+                    </button>
+                </div>
+
+                <div class="water-log-section">
+                    <h3>📋 Dagens logg</h3>
+                    <div id="water-log-list" class="log-list">
+                        <p class="empty-state">Ingen glass registrert ennå</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ TOALETTLOGG ============ -->
+        <section id="bathroom-view" class="view app-view" style="display:none;">
+            <div class="view-header">
+                <button class="btn-back" onclick="showView('home')">← Tilbake</button>
+                <h1>🚽 Toalettlogg</h1>
+            </div>
+            <div class="view-content">
+                <div class="bathroom-status">
+                    <div class="bathroom-last-label">Siste besøk (nr. 2):</div>
+                    <div class="bathroom-last-time" id="bathroom-last-time">Ingen registrert i dag</div>
+                    <div class="bathroom-count" id="bathroom-count-text">0 besøk i dag</div>
+                </div>
+
+                <button class="btn btn-bathroom-log" onclick="logBathroom()">
+                    🚽 Registrer dobesøk NÅ
+                </button>
+
+                <div class="bathroom-note-section">
+                    <label for="bathroom-note">Merknad (valgfritt):</label>
+                    <textarea id="bathroom-note" class="input-large" placeholder="F.eks. normalt, løst, hardt..." rows="2"></textarea>
+                </div>
+
+                <div class="bathroom-log-section">
+                    <h3>📋 Dagens besøk</h3>
+                    <div id="bathroom-log-list" class="log-list">
+                        <p class="empty-state">Ingen besøk registrert i dag</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ MEDISINER ============ -->
+        <section id="medicine-view" class="view app-view" style="display:none;">
+            <div class="view-header">
+                <button class="btn-back" onclick="showView('home')">← Tilbake</button>
+                <h1>💊 Medisiner</h1>
+            </div>
+            <div class="view-content">
+                <div class="medicine-today">
+                    <h3>📋 Dagens medisiner</h3>
+                    <div id="medicine-today-list" class="medicine-list">
+                        <p class="empty-state">Ingen medisiner lagt til ennå. Gå til innstillinger for å legge til medisiner.</p>
+                    </div>
+                </div>
+
+                <button class="btn btn-medicine-add" onclick="showAddMedicineModal()">
+                    ➕ Legg til ny medisin
+                </button>
+
+                <div class="medicine-taken-section">
+                    <h3>✅ Tatt i dag</h3>
+                    <div id="medicine-taken-list" class="log-list">
+                        <p class="empty-state">Ingen medisiner tatt ennå i dag</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ HELSE ============ -->
+        <section id="health-view" class="view app-view" style="display:none;">
+            <div class="view-header">
+                <button class="btn-back" onclick="showView('home')">← Tilbake</button>
+                <h1>❤️ Helse</h1>
+            </div>
+            <div class="view-content">
+                <!-- Humør -->
+                <div class="health-section">
+                    <h3>😊 Hvordan føler du deg?</h3>
+                    <div class="mood-selector" id="mood-selector">
+                        <button class="mood-btn" onclick="setMood('veldig_bra')" data-mood="veldig_bra">😄<span>Veldig bra</span></button>
+                        <button class="mood-btn" onclick="setMood('bra')" data-mood="bra">🙂<span>Bra</span></button>
+                        <button class="mood-btn" onclick="setMood('ok')" data-mood="ok">😐<span>OK</span></button>
+                        <button class="mood-btn" onclick="setMood('darlig')" data-mood="darlig">😟<span>Dårlig</span></button>
+                        <button class="mood-btn" onclick="setMood('veldig_darlig')" data-mood="veldig_darlig">😢<span>Veldig dårlig</span></button>
+                    </div>
+                </div>
+
+                <!-- Smertenivå -->
+                <div class="health-section">
+                    <h3>🤕 Smertenivå</h3>
+                    <div class="pain-selector">
+                        <input type="range" id="pain-level" min="0" max="10" value="0" class="pain-slider" oninput="updatePainDisplay()">
+                        <div class="pain-labels">
+                            <span>Ingen smerte</span>
+                            <span id="pain-value-display">0</span>
+                            <span>Mest smerte</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Blodtrykk -->
+                <div class="health-section">
+                    <h3>🩺 Blodtrykk</h3>
+                    <div class="bp-input-row">
+                        <div class="bp-field">
+                            <label>Overtrykk (systolisk)</label>
+                            <input type="number" id="bp-systolic" class="input-large" placeholder="120" min="60" max="250">
+                        </div>
+                        <div class="bp-divider">/</div>
+                        <div class="bp-field">
+                            <label>Undertrykk (diastolisk)</label>
+                            <input type="number" id="bp-diastolic" class="input-large" placeholder="80" min="30" max="150">
+                        </div>
+                    </div>
+                    <div class="bp-field" style="margin-top: 12px;">
+                        <label>Puls (slag per minutt)</label>
+                        <input type="number" id="bp-pulse" class="input-large" placeholder="70" min="30" max="200">
+                    </div>
+                </div>
+
+                <!-- Vekt -->
+                <div class="health-section">
+                    <h3>⚖️ Vekt</h3>
+                    <div class="weight-field">
+                        <input type="number" id="health-weight" class="input-large" placeholder="75.0" step="0.1" min="20" max="300">
+                        <span class="unit-label">kg</span>
+                    </div>
+                </div>
+
+                <!-- Notater -->
+                <div class="health-section">
+                    <h3>📝 Helsemerknad</h3>
+                    <textarea id="health-notes" class="input-large" placeholder="Eventuelle merknader om helsen din i dag..." rows="3"></textarea>
+                </div>
+
+                <button class="btn btn-save-health" onclick="saveHealthLog()">
+                    💾 Lagre helsedata
+                </button>
+            </div>
+        </section>
+
+        <!-- ============ SØVN ============ -->
+        <section id="sleep-view" class="view app-view" style="display:none;">
+            <div class="view-header">
+                <button class="btn-back" onclick="showView('home')">← Tilbake</button>
+                <h1>😴 Søvn</h1>
+            </div>
+            <div class="view-content">
+                <div class="sleep-section">
+                    <h3>🌙 Når la du deg i går?</h3>
+                    <input type="time" id="sleep-bedtime" class="input-large" value="22:00">
+                </div>
+                <div class="sleep-section">
+                    <h3>☀️ Når sto du opp?</h3>
+                    <input type="time" id="sleep-waketime" class="input-large" value="07:00">
+                </div>
+                <div class="sleep-section">
+                    <h3>⭐ Søvnkvalitet</h3>
+                    <div class="sleep-quality-selector" id="sleep-quality-selector">
+                        <button class="quality-btn" onclick="setSleepQuality('veldig_bra')" data-quality="veldig_bra">😴💤<span>Veldig bra</span></button>
+                        <button class="quality-btn" onclick="setSleepQuality('bra')" data-quality="bra">😊<span>Bra</span></button>
+                        <button class="quality-btn" onclick="setSleepQuality('ok')" data-quality="ok">😐<span>OK</span></button>
+                        <button class="quality-btn" onclick="setSleepQuality('darlig')" data-quality="darlig">😫<span>Dårlig</span></button>
+                    </div>
+                </div>
+                <div id="sleep-duration-display" class="sleep-duration">
+                    <p>Beregnet søvntid: <strong id="sleep-duration-text">9 timer</strong></p>
+                </div>
+                <button class="btn btn-save-health" onclick="saveSleepLog()">
+                    💾 Lagre søvndata
+                </button>
+
+                <div class="sleep-history">
+                    <h3>📊 Siste 7 dager</h3>
+                    <div id="sleep-history-list" class="log-list">
+                        <p class="empty-state">Ingen søvndata registrert ennå</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ BEVEGELSE ============ -->
+        <section id="movement-view" class="view app-view" style="display:none;">
+            <div class="view-header">
+                <button class="btn-back" onclick="showView('home')">← Tilbake</button>
+                <h1>🚶 Bevegelse</h1>
+            </div>
+            <div class="view-content">
+                <div class="movement-status" id="movement-status">
+                    <p>Aktiviteter i dag: <strong id="movement-count">0</strong></p>
+                </div>
+
+                <h3>Registrer aktivitet</h3>
+                <div class="movement-buttons">
+                    <button class="btn btn-movement" onclick="logMovement('gåtur')">🚶 Gåtur</button>
+                    <button class="btn btn-movement" onclick="logMovement('hagearbeid')">🌱 Hagearbeid</button>
+                    <button class="btn btn-movement" onclick="logMovement('gymnastikk')">🤸 Gymnastikk</button>
+                    <button class="btn btn-movement" onclick="logMovement('sykling')">🚴 Sykling</button>
+                    <button class="btn btn-movement" onclick="logMovement('svømming')">🏊 Svømming</button>
+                    <button class="btn btn-movement" onclick="logMovement('annet')">✨ Annet</button>
+                </div>
+
+                <div class="movement-duration-section" id="movement-duration-section" style="display:none;">
+                    <label>Varighet (minutter):</label>
+                    <input type="number" id="movement-duration" class="input-large" placeholder="30" min="1" max="300">
+                    <button class="btn btn-save-health" onclick="saveMovement()">💾 Lagre</button>
+                </div>
+
+                <div class="movement-log-section">
+                    <h3>📋 Dagens aktiviteter</h3>
+                    <div id="movement-log-list" class="log-list">
+                        <p class="empty-state">Ingen aktivitet registrert i dag</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ DAGBOK ============ -->
+        <section id="diary-view" class="view app-view" style="display:none;">
+            <div class="view-header">
+                <button class="btn-back" onclick="showView('home')">← Tilbake</button>
+                <h1>📝 Dagbok</h1>
+            </div>
+            <div class="view-content">
+                <div class="diary-today">
+                    <h3>📅 I dag</h3>
+                    <textarea id="diary-text" class="input-large diary-textarea" placeholder="Skriv litt om dagen din her..." rows="6"></textarea>
+                    <button class="btn btn-save-health" onclick="saveDiary()">💾 Lagre</button>
+                </div>
+
+                <div class="diary-history">
+                    <h3>📖 Tidligere innlegg</h3>
+                    <div id="diary-history-list" class="log-list">
+                        <p class="empty-state">Ingen dagbokinnlegg ennå</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ HANDLELISTE ============ -->
+        <section id="shopping-view" class="view app-view" style="display:none;">
+            <div class="view-header">
+                <button class="btn-back" onclick="showView('home')">← Tilbake</button>
+                <h1>🛒 Handleliste</h1>
+            </div>
+            <div class="view-content">
+                <div class="shopping-add">
+                    <input type="text" id="shopping-input" class="input-large" placeholder="Legg til vare..." onkeydown="if(event.key==='Enter')addShoppingItem()">
+                    <button class="btn btn-water-add" onclick="addShoppingItem()">➕ Legg til</button>
+                </div>
+                <div id="shopping-list" class="shopping-list">
+                    <p class="empty-state">Handlelisten er tom</p>
+                </div>
+                <button class="btn btn-danger" onclick="clearCompletedShopping()" id="btn-clear-shopping" style="display:none;">
+                    🗑️ Fjern avkryssede varer
+                </button>
+            </div>
+        </section>
+
+        <!-- ============ NØDKONTAKTER ============ -->
+        <section id="emergency-view" class="view app-view" style="display:none;">
+            <div class="view-header">
+                <button class="btn-back" onclick="showView('home')">← Tilbake</button>
+                <h1>🆘 Nødkontakter</h1>
+            </div>
+            <div class="view-content">
+                <div class="emergency-fixed">
+                    <a href="tel:113" class="btn btn-emergency btn-emergency-red">
+                        🚑 Ring 113 – Ambulanse
+                    </a>
+                    <a href="tel:110" class="btn btn-emergency btn-emergency-orange">
+                        🚒 Ring 110 – Brann
+                    </a>
+                    <a href="tel:112" class="btn btn-emergency btn-emergency-blue">
+                        👮 Ring 112 – Politi
+                    </a>
+                    <a href="tel:116117" class="btn btn-emergency btn-emergency-green">
+                        🏥 Ring 116 117 – Legevakt
+                    </a>
+                </div>
+
+                <h3>👨‍👩‍👧‍👦 Mine kontakter</h3>
+                <div id="emergency-contacts-list" class="contacts-list">
+                    <p class="empty-state">Ingen kontakter lagt til ennå</p>
+                </div>
+                <button class="btn btn-medicine-add" onclick="showAddContactModal()">
+                    ➕ Legg til kontakt
+                </button>
+            </div>
+        </section>
+
+        <!-- ============ HISTORIKK ============ -->
+        <section id="history-view" class="view app-view" style="display:none;">
+            <div class="view-header">
+                <button class="btn-back" onclick="showView('home')">← Tilbake</button>
+                <h1>📅 Historikk</h1>
+            </div>
+            <div class="view-content">
+                <div class="history-nav">
+                    <button class="btn btn-history-nav" onclick="changeHistoryDate(-1)">← Forrige dag</button>
+                    <span id="history-date-display" class="history-date-display">I dag</span>
+                    <button class="btn btn-history-nav" onclick="changeHistoryDate(1)">Neste dag →</button>
+                </div>
+                <div id="history-content" class="history-content">
+                    <p class="empty-state">Velg en dato for å se historikk</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ INNSTILLINGER ============ -->
+        <section id="settings-view" class="view app-view" style="display:none;">
+            <div class="view-header">
+                <button class="btn-back" onclick="showView('home')">← Tilbake</button>
+                <h1>⚙️ Innstillinger</h1>
+            </div>
+            <div class="view-content">
+                <!-- Profil -->
+                <div class="settings-section">
+                    <h3>👤 Profil</h3>
+                    <label for="settings-name">Ditt navn:</label>
+                    <input type="text" id="settings-name" class="input-large" placeholder="Skriv ditt navn...">
+                </div>
+
+                <!-- Vannmål -->
+                <div class="settings-section">
+                    <h3>💧 Vannmål</h3>
+                    <label for="settings-water-goal">Antall glass per dag:</label>
+                    <input type="number" id="settings-water-goal" class="input-large" value="8" min="1" max="20">
+                </div>
+
+                <!-- Påminnelser -->
+                <div class="settings-section">
+                    <h3>🔔 Påminnelser</h3>
+                    <div class="setting-toggle">
+                        <label>Vannpåminnelse</label>
+                        <div class="toggle-row">
+                            <input type="checkbox" id="settings-water-reminder" class="toggle-input">
+                            <label for="settings-water-reminder" class="toggle-label">Aktiver</label>
+                        </div>
+                        <div class="setting-sub" id="water-reminder-settings">
+                            <label>Intervall (minutter):</label>
+                            <input type="number" id="settings-water-interval" class="input-large" value="60" min="15" max="240" step="15">
+                        </div>
+                    </div>
+                    <div class="setting-toggle">
+                        <label>Medisinpåminnelse</label>
+                        <div class="toggle-row">
+                            <input type="checkbox" id="settings-medicine-reminder" class="toggle-input">
+                            <label for="settings-medicine-reminder" class="toggle-label">Aktiver</label>
+                        </div>
+                    </div>
+                    <div class="setting-toggle">
+                        <label>Bevegelsespåminnelse</label>
+                        <div class="toggle-row">
+                            <input type="checkbox" id="settings-movement-reminder" class="toggle-input">
+                            <label for="settings-movement-reminder" class="toggle-label">Aktiver</label>
+                        </div>
+                        <div class="setting-sub" id="movement-reminder-settings">
+                            <label>Intervall (minutter):</label>
+                            <input type="number" id="settings-movement-interval" class="input-large" value="120" min="30" max="480" step="30">
+                        </div>
+                    </div>
+                    <div class="setting-toggle">
+                        <label>Daglig innsjekk-påminnelse</label>
+                        <div class="toggle-row">
+                            <input type="checkbox" id="settings-checkin-reminder" class="toggle-input">
+                            <label for="settings-checkin-reminder" class="toggle-label">Aktiver</label>
+                        </div>
+                        <div class="setting-sub">
+                            <label>Tidspunkt:</label>
+                            <input type="time" id="settings-checkin-time" class="input-large" value="09:00">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tekststørrelse -->
+                <div class="settings-section">
+                    <h3>🔤 Tekststørrelse</h3>
+                    <div class="font-size-buttons">
+                        <button class="btn btn-font-size" onclick="setFontSize('normal')">A<span>Normal</span></button>
+                        <button class="btn btn-font-size" onclick="setFontSize('large')">A<span>Stor</span></button>
+                        <button class="btn btn-font-size btn-font-xl" onclick="setFontSize('xlarge')">A<span>Ekstra stor</span></button>
+                    </div>
+                </div>
+
+                <!-- Varslingslyd -->
+                <div class="settings-section">
+                    <h3>🔊 Varslingslyd</h3>
+                    <div class="toggle-row">
+                        <input type="checkbox" id="settings-sound" class="toggle-input" checked>
+                        <label for="settings-sound" class="toggle-label">Spill lyd ved påminnelser</label>
+                    </div>
+                </div>
+
+                <!-- Mine medisiner -->
+                <div class="settings-section">
+                    <h3>💊 Mine faste medisiner</h3>
+                    <div id="settings-medicine-list" class="medicine-settings-list">
+                        <p class="empty-state">Ingen medisiner lagt til</p>
+                    </div>
+                    <button class="btn btn-medicine-add" onclick="showAddMedicineModal()">
+                        ➕ Legg til medisin
+                    </button>
+                </div>
+
+                <button class="btn btn-save-health" onclick="saveSettings()" style="margin-top: 20px;">
+                    💾 Lagre innstillinger
+                </button>
+
+                <div class="settings-info">
+                    <p>Daglig Helse v<span id="app-version">1.0.0</span></p>
+                    <p>Innlogget som: <span id="settings-email"></span></p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ BUNNNAVIGASJON ============ -->
+        <nav id="bottom-nav" class="bottom-nav">
+            <button class="nav-btn active" onclick="showView('home')" data-view="home">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">Hjem</span>
+            </button>
+            <button class="nav-btn" onclick="showView('water')" data-view="water">
+                <span class="nav-icon">💧</span>
+                <span class="nav-label">Vann</span>
+            </button>
+            <button class="nav-btn" onclick="showView('bathroom')" data-view="bathroom">
+                <span class="nav-icon">🚽</span>
+                <span class="nav-label">Do</span>
+            </button>
+            <button class="nav-btn" onclick="showView('medicine')" data-view="medicine">
+                <span class="nav-icon">💊</span>
+                <span class="nav-label">Medisin</span>
+            </button>
+            <button class="nav-btn" onclick="showView('emergency')" data-view="emergency">
+                <span class="nav-icon">🆘</span>
+                <span class="nav-label">SOS</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- ============ MODALER ============ -->
+
+    <!-- Legg til medisin -->
+    <div id="modal-add-medicine" class="modal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>💊 Legg til medisin</h2>
+                <button class="btn-close-modal" onclick="closeModal('modal-add-medicine')">✕</button>
+            </div>
+            <div class="modal-body">
+                <label for="medicine-name">Navn på medisin:</label>
+                <input type="text" id="medicine-name" class="input-large" placeholder="F.eks. Paracet, Blodtrykk...">
+                
+                <label>Dosering:</label>
+                <input type="text" id="medicine-dosage" class="input-large" placeholder="F.eks. 1 tablett, 5 ml...">
+                
+                <label>Tidspunkter (kan legge til flere):</label>
+                <div id="medicine-times-list" class="medicine-times">
+                    <div class="medicine-time-row">
+                        <input type="time" class="input-large medicine-time-input" value="08:00">
+                    </div>
+                </div>
+                <button class="btn btn-small" onclick="addMedicineTimeRow()">➕ Legg til tidspunkt</button>
+                
+                <button class="btn btn-save-health" onclick="saveMedicine()" style="margin-top: 20px;">
+                    💾 Lagre medisin
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legg til kontakt -->
+    <div id="modal-add-contact" class="modal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>👤 Legg til kontakt</h2>
+                <button class="btn-close-modal" onclick="closeModal('modal-add-contact')">✕</button>
+            </div>
+            <div class="modal-body">
+                <label for="contact-name">Navn:</label>
+                <input type="text" id="contact-name" class="input-large" placeholder="F.eks. Ola Nordmann">
+                
+                <label for="contact-phone">Telefonnummer:</label>
+                <input type="tel" id="contact-phone" class="input-large" placeholder="F.eks. 99887766">
+                
+                <label for="contact-relation">Relasjon:</label>
+                <select id="contact-relation" class="input-large">
+                    <option value="barnebarn">Barnebarn</option>
+                    <option value="barn">Barn (sønn/datter)</option>
+                    <option value="ektefelle">Ektefelle</option>
+                    <option value="nabo">Nabo</option>
+                    <option value="venn">Venn</option>
+                    <option value="lege">Lege</option>
+                    <option value="hjemmesykepleier">Hjemmesykepleier</option>
+                    <option value="annet">Annet</option>
+                </select>
+                
+                <button class="btn btn-save-health" onclick="saveContact()" style="margin-top: 20px;">
+                    💾 Lagre kontakt
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Påminnelse-varsling -->
+    <div id="reminder-toast" class="reminder-toast" style="display:none;">
+        <div class="toast-content">
+            <div class="toast-icon" id="toast-icon">💧</div>
+            <div class="toast-text" id="toast-text">På tide å drikke et glass vann!</div>
+            <div class="toast-actions">
+                <button class="btn btn-toast" onclick="dismissReminder()">OK, forstått!</button>
+                <button class="btn btn-toast btn-toast-action" id="toast-action-btn" onclick="handleReminderAction()" style="display:none;">Registrer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bekreftelsesmelding -->
+    <div id="confirm-toast" class="confirm-toast" style="display:none;">
+        <span id="confirm-text">✅ Lagret!</span>
+    </div>
+
+    <!-- Firebase SDK (compat) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    
+    <!-- App Scripts -->
+    <script src="firebase-config.js?v=1.0"></script>
+    <script src="app.js?v=1.0"></script>
+</body>
+</html>

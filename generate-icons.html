@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generer ikoner for Daglig Helse</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; text-align: center; }
+        canvas { border: 1px solid #ccc; margin: 10px; }
+        button { padding: 12px 24px; font-size: 16px; margin: 10px; cursor: pointer; background: #2E7D9B; color: white; border: none; border-radius: 8px; }
+        a { display: inline-block; padding: 12px 24px; font-size: 16px; margin: 10px; background: #4CAF50; color: white; text-decoration: none; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <h1>Generer PNG-ikoner</h1>
+    <p>Klikk knappene for å laste ned ikonene. Legg dem i <code>icons/</code>-mappen.</p>
+    
+    <div>
+        <h3>192x192</h3>
+        <canvas id="canvas192" width="192" height="192"></canvas>
+        <br>
+        <a id="download192" download="icon-192.png">Last ned 192x192</a>
+    </div>
+    
+    <div>
+        <h3>512x512</h3>
+        <canvas id="canvas512" width="512" height="512"></canvas>
+        <br>
+        <a id="download512" download="icon-512.png">Last ned 512x512</a>
+    </div>
+
+    <script>
+        function drawIcon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            const s = size / 512; // Scale factor
+            
+            // Background gradient
+            const grad = ctx.createLinearGradient(0, 0, size, size);
+            grad.addColorStop(0, '#2E7D9B');
+            grad.addColorStop(1, '#1B5E7B');
+            
+            // Rounded rect
+            const r = 96 * s;
+            ctx.beginPath();
+            ctx.moveTo(r, 0);
+            ctx.lineTo(size - r, 0);
+            ctx.quadraticCurveTo(size, 0, size, r);
+            ctx.lineTo(size, size - r);
+            ctx.quadraticCurveTo(size, size, size - r, size);
+            ctx.lineTo(r, size);
+            ctx.quadraticCurveTo(0, size, 0, size - r);
+            ctx.lineTo(0, r);
+            ctx.quadraticCurveTo(0, 0, r, 0);
+            ctx.closePath();
+            ctx.fillStyle = grad;
+            ctx.fill();
+            
+            // Heart
+            const cx = size / 2;
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.beginPath();
+            
+            const heartTop = 120 * s;
+            const heartBottom = 420 * s;
+            const heartLeft = 100 * s;
+            const heartRight = 412 * s;
+            
+            ctx.moveTo(cx, heartBottom);
+            ctx.bezierCurveTo(heartLeft - 20*s, 340*s, heartLeft, 180*s, heartLeft + 45*s, 155*s);
+            ctx.bezierCurveTo(heartLeft + 80*s, heartTop, cx - 10*s, heartTop, cx, 160*s);
+            ctx.bezierCurveTo(cx + 10*s, heartTop, heartRight - 80*s + 45*s, heartTop, heartRight - 45*s, 155*s);
+            ctx.bezierCurveTo(heartRight, 180*s, heartRight + 20*s, 340*s, cx, heartBottom);
+            ctx.fill();
+            ctx.restore();
+            
+            // Pulse line
+            ctx.strokeStyle = '#2E7D9B';
+            ctx.lineWidth = 10 * s;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            ctx.moveTo(150 * s, 250 * s);
+            ctx.lineTo(210 * s, 250 * s);
+            ctx.lineTo(230 * s, 200 * s);
+            ctx.lineTo(260 * s, 300 * s);
+            ctx.lineTo(280 * s, 220 * s);
+            ctx.lineTo(300 * s, 270 * s);
+            ctx.lineTo(320 * s, 250 * s);
+            ctx.lineTo(370 * s, 250 * s);
+            ctx.stroke();
+            
+            return canvas.toDataURL('image/png');
+        }
+        
+        // Draw both sizes
+        const url192 = drawIcon(document.getElementById('canvas192'), 192);
+        const url512 = drawIcon(document.getElementById('canvas512'), 512);
+        
+        document.getElementById('download192').href = url192;
+        document.getElementById('download512').href = url512;
+    </script>
+</body>
+</html>
