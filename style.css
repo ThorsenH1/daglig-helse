@@ -1714,6 +1714,34 @@ label {
     outline-offset: 2px;
 }
 
+/* Push-varsler status i innstillinger */
+.push-status {
+    margin-top: var(--spacing-sm);
+}
+
+.push-status-item {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: 12px;
+    margin-bottom: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+.push-status-ok {
+    background: var(--color-success-light);
+    color: #2E7D32;
+}
+
+.push-status-warning {
+    background: var(--color-warning-light);
+    color: #E65100;
+}
+
+.push-status-error {
+    background: var(--color-danger-light);
+    color: #C62828;
+}
+
 /* Bedre touch-tilbakemelding på knapper */
 .btn:active, .nav-btn:active, .summary-card:active, .shopping-item:active {
     transform: scale(0.97);

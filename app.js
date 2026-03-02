@@ -58,6 +58,10 @@ let reminderTimers = {};
 let lastWaterReminder = 0;
 let lastMovementReminder = 0;
 
+// Firebase Cloud Messaging
+let messaging = null;
+let fcmToken = null;
+
 // ==========================================
 // INITIALISERING
 // ==========================================
@@ -80,6 +84,9 @@ function initApp() {
             }
         });
         
+        // Initialiser Cloud Messaging (for push-varsler når appen er lukket)
+        initializeMessaging();
+        
         // Lytt på auth-endringer
         firebase.auth().onAuthStateChanged(handleAuthStateChanged);
     } else {
@@ -92,7 +99,7 @@ function initApp() {
     updateClock();
     setInterval(updateClock, 1000);
     
-    // Registrer service worker
+    // Registrer service workers
     registerServiceWorker();
 }
 
@@ -300,6 +307,10 @@ async function loadAllData() {
         
         updateDashboard();
         localStorage.setItem('dagligHelse_lastDate', getTodayString());
+        
+        // Synkroniser påminnelsesinnstillinger til skyen
+        await syncReminderSettingsToCloud();
+        
         console.log('Alle data lastet');
     } catch (err) {
         console.error('Feil ved lasting av data:', err);
@@ -759,6 +770,7 @@ async function saveMedicine() {
     updateMedicineView();
     updateSettingsView();
     updateDashboard();
+    await syncReminderSettingsToCloud();
     showConfirm('💊 Medisin lagret!');
 }
 
@@ -773,6 +785,7 @@ async function deleteMedicine(medicineId) {
     updateMedicineView();
     updateSettingsView();
     updateDashboard();
+    await syncReminderSettingsToCloud();
     showConfirm('🗑️ Medisin slettet');
 }
 
@@ -1501,6 +1514,97 @@ function updateSettingsView() {
             </div>
         `).join('');
     }
+    
+    // Oppdater push-varsler status
+    updatePushStatus();
+}
+
+function updatePushStatus() {
+    const container = document.getElementById('push-status');
+    if (!container) return;
+    
+    let html = '';
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
+                  window.navigator.standalone === true;
+    
+    // Sjekk 1: Nettleser-støtte
+    const hasNotificationAPI = 'Notification' in window;
+    const hasServiceWorker = 'serviceWorker' in navigator;
+    
+    if (!hasNotificationAPI || !hasServiceWorker) {
+        html += '<div class="push-status-item push-status-error">❌ Nettleseren din støtter ikke push-varsler</div>';
+    } else {
+        html += '<div class="push-status-item push-status-ok">✅ Nettleseren støtter varsler</div>';
+    }
+    
+    // Sjekk 2: iOS-spesifikt
+    if (isIOS) {
+        if (isPWA) {
+            html += '<div class="push-status-item push-status-ok">✅ Appen er installert på hjemskjermen</div>';
+        } else {
+            html += '<div class="push-status-item push-status-warning">⚠️ <strong>iPhone:</strong> For å motta varsler MÅ du legge appen til hjemskjermen. Trykk på <strong>Del-ikonet</strong> (firkant med pil opp) → <strong>"Legg til på Hjem-skjerm"</strong></div>';
+        }
+    }
+    
+    // Sjekk 3: Varslingstillatelse
+    if (hasNotificationAPI) {
+        if (Notification.permission === 'granted') {
+            html += '<div class="push-status-item push-status-ok">✅ Varslinger er tillatt</div>';
+        } else if (Notification.permission === 'denied') {
+            html += '<div class="push-status-item push-status-error">❌ Varslinger er blokkert. Gå til telefonens innstillinger for å tillate varsler for denne appen.</div>';
+        } else {
+            html += '<div class="push-status-item push-status-warning">⚠️ Du har ikke gitt tillatelse til varsler ennå. Trykk "Test varslinger" under.</div>';
+        }
+    }
+    
+    // Sjekk 4: FCM Token
+    if (fcmToken) {
+        html += '<div class="push-status-item push-status-ok">✅ Push-varsler er aktivert og klar!</div>';
+    } else if (VAPID_KEY === '__VAPID_KEY_HER__') {
+        html += '<div class="push-status-item push-status-warning">⚠️ VAPID-nøkkel mangler (utvikler må konfigurere denne)</div>';
+    } else {
+        html += '<div class="push-status-item push-status-warning">⏳ Push-varsler er ikke koblet opp ennå</div>';
+    }
+    
+    container.innerHTML = html;
+}
+
+async function testPushSetup() {
+    // Be om tillatelse
+    if ('Notification' in window && Notification.permission === 'default') {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            showConfirm('❌ Du må tillate varsler for at påminnelser skal fungere');
+            updatePushStatus();
+            return;
+        }
+    }
+    
+    if ('Notification' in window && Notification.permission === 'granted') {
+        // Prøv å registrere FCM
+        await registerFCMToken();
+        
+        // Vis testnotifikasjon
+        if (navigator.serviceWorker) {
+            const reg = await navigator.serviceWorker.ready;
+            await reg.showNotification('🔔 Test fra Daglig Helse', {
+                body: 'Flott! Varslinger fungerer! Du vil nå motta påminnelser selv når appen er lukket.',
+                icon: 'icons/icon-192.png',
+                badge: 'icons/icon-192.png',
+                vibrate: [200, 100, 200],
+                tag: 'daglig-helse-test',
+                requireInteraction: true
+            });
+            showConfirm('✅ Testvarsling sendt!');
+        } else {
+            new Notification('🔔 Test', { body: 'Varsler fungerer!' });
+        }
+    } else {
+        showConfirm('❌ Varsler er blokkert av nettleseren');
+    }
+    
+    updatePushStatus();
 }
 
 async function saveSettings() {
@@ -1517,8 +1621,17 @@ async function saveSettings() {
     
     await saveSettingsToFirebase();
     
-    // Oppdater påminnelser
+    // Synkroniser påminnelser til skyen (for push-varsler)
+    await syncReminderSettingsToCloud();
+    
+    // Oppdater lokale påminnelser (backup)
     setupReminders();
+    
+    // Hvis påminnelser er aktivert, sørg for at vi har FCM-token
+    if (settings.waterReminder || settings.medicineReminder || 
+        settings.movementReminder || settings.checkinReminder) {
+        await registerFCMToken();
+    }
     
     // Oppdater greeting
     updateGreeting();
@@ -1541,16 +1654,170 @@ function applyFontSize(size) {
 }
 
 // ==========================================
-// PÅMINNELSER & VARSLINGER
+// PUSH-VARSLER (FCM) – Fungerer selv når appen er lukket
 // ==========================================
-function requestNotificationPermission() {
-    if ('Notification' in window && Notification.permission === 'default') {
-        // Vent litt med å be om tillatelse
-        setTimeout(() => {
-            Notification.requestPermission().then(permission => {
-                console.log('Varslingstillatelse:', permission);
+
+// VAPID-nøkkel fra Firebase Console → Prosjektinnstillinger → Cloud Messaging → Web Push-sertifikater
+// Brukeren MÅ generere denne og erstatte verdien under.
+// Se README for instruksjoner.
+const VAPID_KEY = '__VAPID_KEY_HER__';
+
+function initializeMessaging() {
+    try {
+        if (typeof firebase.messaging === 'function') {
+            messaging = firebase.messaging();
+            
+            // Håndter varsler som mottas mens appen er ÅPEN (forgrunn)
+            messaging.onMessage((payload) => {
+                console.log('[FCM] Forgrunnmelding mottatt:', payload);
+                const data = payload.data || {};
+                const notification = payload.notification || {};
+                const title = notification.title || data.title || 'Påminnelse';
+                const body = notification.body || data.body || '';
+                const type = data.type || 'general';
+                
+                // Vis in-app toast
+                showReminderToast(
+                    type === 'water' ? '💧' : type === 'medicine' ? '💊' : type === 'movement' ? '🚶' : '🔔',
+                    body,
+                    type
+                );
+                
+                // Spill lyd
+                if (settings.soundEnabled !== false) {
+                    playReminderSound();
+                }
             });
-        }, 3000);
+            
+            console.log('[FCM] Messaging initialisert');
+        } else {
+            console.warn('[FCM] firebase.messaging() ikke tilgjengelig');
+        }
+    } catch (err) {
+        console.warn('[FCM] Kunne ikke initialisere messaging:', err);
+    }
+}
+
+async function requestNotificationPermission() {
+    // Steg 1: Be om tillatelse
+    if ('Notification' in window) {
+        if (Notification.permission === 'default') {
+            // Vent litt slik at bruker har sett appen først
+            await new Promise(r => setTimeout(r, 2000));
+            const permission = await Notification.requestPermission();
+            console.log('[FCM] Varslingstillatelse:', permission);
+            if (permission !== 'granted') {
+                console.warn('[FCM] Bruker nektet varsler');
+                return;
+            }
+        } else if (Notification.permission !== 'granted') {
+            console.warn('[FCM] Varsler er blokkert av bruker');
+            return;
+        }
+    }
+    
+    // Steg 2: Hent FCM-token
+    await registerFCMToken();
+}
+
+async function registerFCMToken() {
+    if (!messaging || !currentUser) return;
+    
+    // Sjekk at VAPID-nøkkel er satt
+    if (!VAPID_KEY || VAPID_KEY === '__VAPID_KEY_HER__') {
+        console.warn('[FCM] VAPID_KEY er ikke konfigurert! Push-varsler er deaktivert.');
+        console.warn('[FCM] Gå til Firebase Console → Prosjektinnstillinger → Cloud Messaging → Web Push-sertifikater');
+        return;
+    }
+    
+    try {
+        // Registrer FCM service worker
+        const swRegistration = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+        
+        // Hent token
+        const token = await messaging.getToken({
+            vapidKey: VAPID_KEY,
+            serviceWorkerRegistration: swRegistration
+        });
+        
+        if (token) {
+            fcmToken = token;
+            console.log('[FCM] Token hentet:', token.substring(0, 20) + '...');
+            
+            // Lagre token i Firestore slik at Cloud Functions kan sende varsler
+            await saveFCMToken(token);
+        } else {
+            console.warn('[FCM] Ingen token mottatt. Sjekk varslingsinnstillinger.');
+        }
+    } catch (err) {
+        console.error('[FCM] Feil ved henting av token:', err);
+    }
+}
+
+async function saveFCMToken(token) {
+    const ref = getUserRef();
+    if (!ref) return;
+    
+    // Lagre token med enhetsinformasjon
+    const deviceInfo = {
+        token: token,
+        platform: navigator.platform || 'unknown',
+        userAgent: navigator.userAgent.substring(0, 100),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    
+    await ref.collection('fcmTokens').doc(token.substring(0, 40)).set(deviceInfo);
+    console.log('[FCM] Token lagret i Firestore');
+}
+
+// Synkroniser påminnelsesinnstillinger til Firestore
+// slik at Cloud Functions vet NÅR det skal sendes varsler
+async function syncReminderSettingsToCloud() {
+    const ref = getUserRef();
+    if (!ref) return;
+    
+    const now = new Date();
+    const reminderConfig = {
+        // Vannpåminnelser
+        waterReminder: settings.waterReminder || false,
+        waterInterval: settings.waterInterval || 60,
+        waterGoal: settings.waterGoal || 8,
+        
+        // Medisinpåminnelser
+        medicineReminder: settings.medicineReminder || false,
+        medicines: medicines.filter(m => m.active !== false).map(m => ({
+            id: m.id,
+            name: m.name,
+            dosage: m.dosage || '',
+            times: m.times || []
+        })),
+        
+        // Bevegelsespåminnelser
+        movementReminder: settings.movementReminder || false,
+        movementInterval: settings.movementInterval || 120,
+        
+        // Daglig innsjekk
+        checkinReminder: settings.checkinReminder || false,
+        checkinTime: settings.checkinTime || '09:00',
+        
+        // Status
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Oslo',
+        activeHoursStart: 7,  // Ikke send varsler før kl. 07
+        activeHoursEnd: 22,   // Ikke send varsler etter kl. 22
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    
+    await ref.set({ reminderConfig: reminderConfig }, { merge: true });
+    console.log('[FCM] Påminnelsesinnstillinger synkronisert til skyen');
+}
+
+// ==========================================
+// LOKALE PÅMINNELSER (backup når appen er åpen)
+// ==========================================
+function requestNotificationPermissionLegacy() {
+    // Kun brukt som fallback
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
     }
 }
 
@@ -1685,15 +1952,31 @@ function handleReminderAction() {
 }
 
 function sendNotification(title, body) {
+    // Lokalt varsel (vises kun når appen er åpen)
     if ('Notification' in window && Notification.permission === 'granted') {
         try {
-            new Notification(title, {
-                body: body,
-                icon: 'icons/icon-192.png',
-                badge: 'icons/icon-192.png',
-                tag: 'daglig-helse-' + Date.now(),
-                renotify: true
-            });
+            // Prøv service worker-basert notification (mer pålitelig)
+            if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.ready.then(reg => {
+                    reg.showNotification(title, {
+                        body: body,
+                        icon: 'icons/icon-192.png',
+                        badge: 'icons/icon-192.png',
+                        tag: 'daglig-helse-local-' + Date.now(),
+                        renotify: true,
+                        vibrate: [200, 100, 200],
+                        requireInteraction: true
+                    });
+                });
+            } else {
+                new Notification(title, {
+                    body: body,
+                    icon: 'icons/icon-192.png',
+                    badge: 'icons/icon-192.png',
+                    tag: 'daglig-helse-' + Date.now(),
+                    renotify: true
+                });
+            }
         } catch (err) {
             console.log('Notification feilet:', err);
         }
@@ -1757,13 +2040,16 @@ document.addEventListener('click', (e) => {
 // ==========================================
 function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
+        // Registrer caching service worker
         navigator.serviceWorker.register('sw.js')
             .then(reg => {
-                console.log('Service Worker registrert:', reg.scope);
+                console.log('[SW] Cache-worker registrert:', reg.scope);
             })
             .catch(err => {
-                console.log('Service Worker registrering feilet:', err);
+                console.log('[SW] Cache-worker registrering feilet:', err);
             });
+        
+        // FCM service worker registreres separat i registerFCMToken()
     }
 }
 

@@ -1,6 +1,7 @@
 node_modules/
 dataconnect/
-functions/
 src/
 package-lock.json
 .firebase/
+functions/node_modules/
+functions/package-lock.json

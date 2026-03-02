@@ -595,6 +595,17 @@
                     💾 Lagre innstillinger
                 </button>
 
+                <!-- Push-varsler status -->
+                <div class="settings-section" id="push-status-section">
+                    <h3>📲 Push-varsler (selvom appen er lukket)</h3>
+                    <div id="push-status" class="push-status">
+                        <p>Sjekker status...</p>
+                    </div>
+                    <button class="btn btn-medicine-add" onclick="testPushSetup()" style="margin-top: 10px;">
+                        🔔 Test varslinger
+                    </button>
+                </div>
+
                 <div class="settings-info">
                     <p>Daglig Helse v<span id="app-version">1.0.0</span></p>
                     <p>Innlogget som: <span id="settings-email"></span></p>
@@ -712,6 +723,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
     
     <!-- App Scripts -->
     <script src="firebase-config.js?v=1.1"></script>
