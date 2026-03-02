@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     
     <!-- Styles -->
-    <link rel="stylesheet" href="style.css?v=1.1">
+    <link rel="stylesheet" href="style.css?v=2.1">
 </head>
 <body>
 
@@ -71,13 +71,18 @@
                     <div id="clock-date" class="clock-date"></div>
                 </div>
 
-                <!-- Daglig innsjekk -->
+                <!-- Daglig innsjekk (vises kun hvis aktivert i innstillinger) -->
                 <div id="checkin-card" class="checkin-card" style="display:none;">
-                    <h3>🌅 Daglig innsjekk</h3>
-                    <p>Hvordan har du det i dag?</p>
-                    <button class="btn btn-checkin" onclick="dailyCheckIn()">
-                        ✅ Jeg har det bra!
-                    </button>
+                    <div class="checkin-header">
+                        <h3>🌅 God morgen!</h3>
+                        <button class="btn-dismiss-checkin" onclick="dismissCheckIn()" title="Lukk">✕</button>
+                    </div>
+                    <p>Har du det bra i dag?</p>
+                    <div class="checkin-actions">
+                        <button class="btn btn-checkin" onclick="dailyCheckIn()">
+                            ✅ Ja, alt er bra!
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Dagens sammendrag -->
@@ -155,6 +160,9 @@
                     </button>
                     <button class="btn btn-more-menu" onclick="showView('emergency')">
                         🆘 Nødkontakter
+                    </button>
+                    <button class="btn btn-more-menu" id="btn-admin" onclick="showView('admin')" style="display:none;">
+                        👑 Admin
                     </button>
                 </div>
             </div>
@@ -495,6 +503,23 @@
             </div>
         </section>
 
+        <!-- ============ ADMIN PANEL ============ -->
+        <section id="admin-view" class="view app-view" style="display:none;">
+            <div class="view-header">
+                <button class="btn-back" onclick="showView('home')">← Tilbake</button>
+                <h1>👑 Admin</h1>
+            </div>
+            <div class="view-content">
+                <div class="admin-header-info">
+                    <p id="admin-user-count">Laster...</p>
+                    <button class="btn btn-small" onclick="updateAdminView()">🔄 Oppdater</button>
+                </div>
+                <div id="admin-users-list" class="admin-users-list">
+                    <p class="empty-state">Laster brukere...</p>
+                </div>
+            </div>
+        </section>
+
         <!-- ============ INNSTILLINGER ============ -->
         <section id="settings-view" class="view app-view" style="display:none;">
             <div class="view-header">
@@ -726,7 +751,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
     
     <!-- App Scripts -->
-    <script src="firebase-config.js?v=1.1"></script>
-    <script src="app.js?v=1.1"></script>
+    <script src="firebase-config.js?v=2.1"></script>
+    <script src="app.js?v=2.1"></script>
 </body>
 </html>

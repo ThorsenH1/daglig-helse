@@ -1,10 +1,12 @@
 /* =========================================
    DAGLIG HELSE – App Logic
-   Versjon 1.0.0
+   Versjon 2.1.0
    For besteforeldre / eldre brukere
    ========================================= */
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '2.1.0';
+const ADMIN_EMAIL = 'halvor.thorsenh1@gmail.com';
+let isAdmin = false;
 
 // ==========================================
 // STATE
@@ -119,8 +121,16 @@ function handleAuthStateChanged(user) {
     hideLoading();
     if (user) {
         currentUser = user;
+        isAdmin = (user.email === ADMIN_EMAIL);
         document.getElementById('login-view').style.display = 'none';
         document.getElementById('app-container').style.display = 'block';
+        
+        // Vis/skjul admin-knapp
+        const adminBtn = document.getElementById('btn-admin');
+        if (adminBtn) adminBtn.style.display = isAdmin ? 'block' : 'none';
+        
+        // Lagre innloggingsmetadata
+        updateLastLogin(user);
         
         // Last brukerdata
         loadAllData();
@@ -225,6 +235,9 @@ function showView(viewName) {
             break;
         case 'settings':
             updateSettingsView();
+            break;
+        case 'admin':
+            updateAdminView();
             break;
     }
     
@@ -500,9 +513,9 @@ function updateDashboard() {
         document.getElementById('home-health-detail').textContent = 'Trykk for å registrere';
     }
     
-    // Innsjekk
+    // Innsjekk – vis kun hvis påminnelse er aktivert og ikke sjekket inn i dag
     const checkinCard = document.getElementById('checkin-card');
-    if (!todayData.checkedIn) {
+    if (settings.checkinReminder && !todayData.checkedIn) {
         checkinCard.style.display = 'block';
     } else {
         checkinCard.style.display = 'none';
@@ -1333,6 +1346,145 @@ async function dailyCheckIn() {
     
     document.getElementById('checkin-card').style.display = 'none';
     showConfirm('✅ Innsjekk registrert! Ha en fin dag!');
+}
+
+function dismissCheckIn() {
+    document.getElementById('checkin-card').style.display = 'none';
+}
+
+// ==========================================
+// ADMIN – Brukeradministrasjon
+// ==========================================
+async function updateLastLogin(user) {
+    if (!db || !user) return;
+    try {
+        await db.collection('users').doc(user.uid).set({
+            _meta: {
+                email: user.email,
+                displayName: user.displayName || '',
+                photoURL: user.photoURL || '',
+                lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
+                lastLoginDevice: navigator.userAgent.substring(0, 150)
+            }
+        }, { merge: true });
+    } catch (err) {
+        console.warn('Kunne ikke oppdatere innloggingsmetadata:', err);
+    }
+}
+
+async function updateAdminView() {
+    if (!isAdmin) {
+        showConfirm('❌ Ingen tilgang');
+        showView('home');
+        return;
+    }
+    
+    const container = document.getElementById('admin-users-list');
+    if (!container) return;
+    container.innerHTML = '<p>Laster brukere...</p>';
+    
+    try {
+        const usersSnapshot = await db.collection('users').get();
+        
+        if (usersSnapshot.empty) {
+            container.innerHTML = '<p class="empty-state">Ingen brukere funnet</p>';
+            return;
+        }
+        
+        const users = [];
+        usersSnapshot.forEach(doc => {
+            const data = doc.data();
+            users.push({
+                uid: doc.id,
+                email: data._meta?.email || 'Ukjent',
+                displayName: data._meta?.displayName || 'Ukjent navn',
+                photoURL: data._meta?.photoURL || '',
+                lastLogin: data._meta?.lastLogin,
+                lastLoginDevice: data._meta?.lastLoginDevice || '',
+                settings: data.settings || {},
+                reminderConfig: data.reminderConfig || {}
+            });
+        });
+        
+        // Sorter: seneste innlogging først
+        users.sort((a, b) => {
+            const aTime = a.lastLogin?.toDate?.() || new Date(0);
+            const bTime = b.lastLogin?.toDate?.() || new Date(0);
+            return bTime - aTime;
+        });
+        
+        container.innerHTML = users.map(u => {
+            const lastLoginStr = u.lastLogin?.toDate?.() 
+                ? formatRelativeTime(u.lastLogin.toDate()) 
+                : 'Aldri';
+            const lastLoginFull = u.lastLogin?.toDate?.() 
+                ? u.lastLogin.toDate().toLocaleString('no-NO') 
+                : '';
+            const deviceStr = u.lastLoginDevice 
+                ? (u.lastLoginDevice.includes('iPhone') ? '📱 iPhone' 
+                   : u.lastLoginDevice.includes('Android') ? '📱 Android' 
+                   : '💻 PC/Nettbrett')
+                : '';
+            const name = u.settings?.name || u.displayName;
+            const isCurrentUser = u.uid === currentUser?.uid;
+            
+            const remindersActive = [
+                u.reminderConfig?.waterReminder ? '💧' : '',
+                u.reminderConfig?.medicineReminder ? '💊' : '',
+                u.reminderConfig?.movementReminder ? '🚶' : '',
+                u.reminderConfig?.checkinReminder ? '🌅' : ''
+            ].filter(Boolean).join(' ') || 'Ingen';
+            
+            return `
+                <div class="admin-user-card ${isCurrentUser ? 'admin-user-you' : ''}">
+                    <div class="admin-user-header">
+                        <div class="admin-user-avatar">
+                            ${u.photoURL ? `<img src="${escapeHtml(u.photoURL)}" alt="" class="admin-avatar-img">` : '👤'}
+                        </div>
+                        <div class="admin-user-info">
+                            <div class="admin-user-name">${escapeHtml(name)}${isCurrentUser ? ' (deg)' : ''}</div>
+                            <div class="admin-user-email">${escapeHtml(u.email)}</div>
+                        </div>
+                    </div>
+                    <div class="admin-user-details">
+                        <div class="admin-detail-row">
+                            <span>🕐 Sist pålogget:</span>
+                            <span title="${escapeHtml(lastLoginFull)}">${lastLoginStr}</span>
+                        </div>
+                        <div class="admin-detail-row">
+                            <span>📱 Enhet:</span>
+                            <span>${deviceStr}</span>
+                        </div>
+                        <div class="admin-detail-row">
+                            <span>🔔 Aktive varsler:</span>
+                            <span>${remindersActive}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        document.getElementById('admin-user-count').textContent = `${users.length} brukere registrert`;
+        
+    } catch (err) {
+        console.error('Admin: Feil ved lasting av brukere:', err);
+        container.innerHTML = '<p class="empty-state">❌ Kunne ikke laste brukere. Sjekk Firestore-regler.</p>';
+    }
+}
+
+function formatRelativeTime(date) {
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMin < 1) return 'Akkurat nå';
+    if (diffMin < 60) return `${diffMin} min siden`;
+    if (diffHours < 24) return `${diffHours} timer siden`;
+    if (diffDays === 1) return 'I går';
+    if (diffDays < 7) return `${diffDays} dager siden`;
+    return date.toLocaleDateString('no-NO');
 }
 
 // ==========================================
