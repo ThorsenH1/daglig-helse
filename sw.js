@@ -1,7 +1,7 @@
 // =========================================
 // Service Worker – Daglig Helse v1.0
 // =========================================
-const CACHE_NAME = 'daglig-helse-v1.0';
+const CACHE_NAME = 'daglig-helse-v1.1';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -27,7 +27,7 @@ const NETWORK_ONLY_PATTERNS = [
 
 // ---- INSTALL ----
 self.addEventListener('install', event => {
-    console.log('[SW] Installerer v1.0...');
+    console.log('[SW] Installerer v1.1...');
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => cache.addAll(ASSETS_TO_CACHE))
@@ -37,7 +37,7 @@ self.addEventListener('install', event => {
 
 // ---- ACTIVATE ----
 self.addEventListener('activate', event => {
-    console.log('[SW] Aktiverer v1.0...');
+    console.log('[SW] Aktiverer v1.1...');
     event.waitUntil(
         caches.keys().then(cacheNames => {
             return Promise.all(

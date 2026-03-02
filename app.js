@@ -4,7 +4,7 @@
    For besteforeldre / eldre brukere
    ========================================= */
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 
 // ==========================================
 // STATE
@@ -71,6 +71,15 @@ function initApp() {
         firebase.initializeApp(firebaseConfig);
         db = firebase.firestore();
         
+        // Aktiver offline-persistens for bedre ytelse uten nett
+        db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+            if (err.code === 'failed-precondition') {
+                console.warn('Offline-persistens: Flere faner åpne, kun én kan ha persistens.');
+            } else if (err.code === 'unimplemented') {
+                console.warn('Offline-persistens: Ikke støttet i denne nettleseren.');
+            }
+        });
+        
         // Lytt på auth-endringer
         firebase.auth().onAuthStateChanged(handleAuthStateChanged);
     } else {
@@ -129,20 +138,25 @@ function handleAuthStateChanged(user) {
 
 function signInWithGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
     
-    // Bruk redirect for mobil, popup for desktop
-    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        firebase.auth().signInWithRedirect(provider);
-    } else {
-        firebase.auth().signInWithPopup(provider).catch(err => {
-            console.error('Innlogging feilet:', err);
+    // Bruk popup for alle enheter (redirect kan gi problemer med GitHub Pages)
+    firebase.auth().signInWithPopup(provider).catch(err => {
+        console.error('Innlogging feilet:', err);
+        if (err.code === 'auth/popup-blocked') {
+            // Fallback til redirect hvis popup blokkeres
+            firebase.auth().signInWithRedirect(provider);
+        } else if (err.code === 'auth/unauthorized-domain') {
+            showConfirm('❌ Domenet er ikke autorisert i Firebase. Legg til dette domenet i Firebase Console → Authentication → Settings → Authorized domains.');
+        } else {
             showConfirm('❌ Innlogging feilet. Prøv igjen.');
-        });
-    }
+        }
+    });
 }
 
 function handleSignOut() {
     if (confirm('Er du sikker på at du vil logge ut?')) {
+        stopAllReminders();
         firebase.auth().signOut();
     }
 }
@@ -285,9 +299,11 @@ async function loadAllData() {
         ]);
         
         updateDashboard();
+        localStorage.setItem('dagligHelse_lastDate', getTodayString());
         console.log('Alle data lastet');
     } catch (err) {
         console.error('Feil ved lasting av data:', err);
+        showConfirm('⚠️ Kunne ikke laste alle data. Sjekk nettilkoblingen.');
     }
 }
 
@@ -1791,7 +1807,4 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-// Lagre siste dato
-if (currentUser) {
-    localStorage.setItem('dagligHelse_lastDate', getTodayString());
-}
+// Dato-sjekk initialiseres via loadAllData

@@ -47,7 +47,7 @@ En enkel, brukervennlig helseapp designet spesielt for eldre brukere. Store knap
 1. Gå til **Authentication** → **Sign-in method**
 2. Aktiver **Google** som innloggingsmetode
 3. Under **Settings** → **Authorized domains**, legg til:
-   - `dittbrukernavn.github.io`
+   - `thorsenh1.github.io`
 
 **Firestore:**
 1. Gå til **Firestore Database** → **Create database**
@@ -74,7 +74,7 @@ git push -u origin main
 
 3. Gå til **Settings** → **Pages** i GitHub-repoet
 4. Under **Source**, velg **GitHub Actions**
-5. Appen er nå tilgjengelig på: `https://dittbrukernavn.github.io/daglig-helse/`
+5. Appen er nå tilgjengelig på: `https://thorsenh1.github.io/daglig-helse/`
 
 ### 5. Installer som app på telefonen
 

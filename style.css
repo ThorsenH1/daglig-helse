@@ -1714,6 +1714,26 @@ label {
     outline-offset: 2px;
 }
 
+/* Bedre touch-tilbakemelding på knapper */
+.btn:active, .nav-btn:active, .summary-card:active, .shopping-item:active {
+    transform: scale(0.97);
+    opacity: 0.85;
+}
+
+/* Smooth scroll-oppførsel */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Safer area for enheter med notch */
+.bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+#app-header {
+    padding-top: env(safe-area-inset-top, 0px);
+}
+
 /* Print */
 @media print {
     .bottom-nav, #app-header, .btn, button {
