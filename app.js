@@ -5,7 +5,7 @@
    ========================================= */
 
 const APP_VERSION = '3.0.0';
-const ADMIN_EMAILS = ['halvor.thorsenh1@gmail.com', 'halvor.thorsenh@gmail.com'];
+const ADMIN_EMAILS = ['halvor.thorsenh@gmail.com'];
 let isAdmin = false;
 
 // ==========================================
