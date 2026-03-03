@@ -13,12 +13,12 @@
     <meta name="apple-mobile-web-app-title" content="Daglig Helse">
     <meta name="description" content="Enkel helseapp for besteforeldre – spor vann, medisin, toalettbesøk og mer">
     
-    <link rel="manifest" href="manifest.json?v=3.0.0">
+    <link rel="manifest" href="manifest.json?v=3.0.1">
     <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     
     <!-- Styles -->
-    <link rel="stylesheet" href="style.css?v=3.0.0">
+    <link rel="stylesheet" href="style.css?v=3.0.1">
 </head>
 <body>
 
@@ -555,7 +555,13 @@
                         </div>
                         <div class="setting-sub" id="water-reminder-settings">
                             <label>Intervall (minutter):</label>
-                            <input type="number" id="settings-water-interval" class="input-large" value="60" min="15" max="240" step="15">
+                            <input type="number" id="settings-water-interval" class="input-large" value="60" min="1" max="480" step="1">
+                        </div>
+                        <div class="setting-sub" id="active-reminder-window-settings">
+                            <label>Varslinger fra:</label>
+                            <input type="time" id="settings-active-start" class="input-large" value="07:00">
+                            <label style="margin-top:8px; display:block;">Varslinger til:</label>
+                            <input type="time" id="settings-active-end" class="input-large" value="22:00">
                         </div>
                     </div>
                     <div class="setting-toggle">
@@ -754,7 +760,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
     
     <!-- App Scripts -->
-    <script src="firebase-config.js?v=3.0.0"></script>
-    <script src="app.js?v=3.0.0"></script>
+    <script src="firebase-config.js?v=3.0.1"></script>
+    <script src="app.js?v=3.0.1"></script>
 </body>
 </html>

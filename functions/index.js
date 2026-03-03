@@ -80,6 +80,44 @@ function getCurrentHour(timezone) {
     }
 }
 
+function getCurrentMinutesInTimezone(timezone) {
+    try {
+        const now = new Date();
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone || 'Europe/Oslo',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+        const parts = formatter.format(now).split(':').map(Number);
+        return (parts[0] * 60) + parts[1];
+    } catch {
+        const now = new Date();
+        return (now.getHours() * 60) + now.getMinutes();
+    }
+}
+
+function timeStringToMinutes(value, fallbackMinutes) {
+    if (!value || !value.includes(':')) return fallbackMinutes;
+    const [h, m] = value.split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return fallbackMinutes;
+    return (h * 60) + m;
+}
+
+function isWithinActiveWindow(config, timezone) {
+    const fallbackStart = (config.activeHoursStart ?? 7) * 60;
+    const fallbackEnd = (config.activeHoursEnd ?? 22) * 60;
+    const startMinutes = timeStringToMinutes(config.activeStartTime, fallbackStart);
+    const endMinutes = timeStringToMinutes(config.activeEndTime, fallbackEnd);
+    const nowMinutes = getCurrentMinutesInTimezone(timezone);
+
+    if (startMinutes === endMinutes) return true;
+    if (startMinutes < endMinutes) {
+        return nowMinutes >= startMinutes && nowMinutes < endMinutes;
+    }
+    return nowMinutes >= startMinutes || nowMinutes < endMinutes;
+}
+
 /**
  * Send FCM-melding til alle brukerens enheter
  */
@@ -190,12 +228,7 @@ exports.waterReminder = onSchedule(
             const config = userDoc.data().reminderConfig || {};
 
             const tz = config.timezone || 'Europe/Oslo';
-            const hour = getCurrentHour(tz);
-
-            // Ikke send varsler utenfor aktive timer
-            const startHour = config.activeHoursStart || 7;
-            const endHour = config.activeHoursEnd || 22;
-            if (hour < startHour || hour >= endHour) continue;
+            if (!isWithinActiveWindow(config, tz)) continue;
 
             // Sjekk om brukeren allerede har nådd vannmålet i dag
             const today = getTodayString(tz);
@@ -214,8 +247,9 @@ exports.waterReminder = onSchedule(
 
             if (lastSentDoc.exists) {
                 const lastSent = lastSentDoc.data().sentAt?.toDate();
-                if (lastSent) {
-                    const minutesSinceLast = (Date.now() - lastSent.getTime()) / 60000;
+                const lastSentMs = lastSentDoc.data().sentAtMs || (lastSent ? lastSent.getTime() : 0);
+                if (lastSentMs) {
+                    const minutesSinceLast = (Date.now() - lastSentMs) / 60000;
                     if (minutesSinceLast < interval) continue; // For tidlig
                 }
             }
@@ -234,6 +268,7 @@ exports.waterReminder = onSchedule(
                 await db.collection('users').doc(userId)
                     .collection('_pushLog').doc('lastWaterPush').set({
                         sentAt: FieldValue.serverTimestamp(),
+                        sentAtMs: Date.now(),
                         count: currentCount,
                         goal: goal
                     });
@@ -275,6 +310,7 @@ exports.medicineReminder = onSchedule(
             const config = userDoc.data().reminderConfig || {};
 
             const tz = config.timezone || 'Europe/Oslo';
+            if (!isWithinActiveWindow(config, tz)) continue;
             const currentTime = getCurrentTimeInTimezone(tz);
             const today = getTodayString(tz);
 
@@ -369,12 +405,7 @@ exports.movementReminder = onSchedule(
             const config = userDoc.data().reminderConfig || {};
 
             const tz = config.timezone || 'Europe/Oslo';
-            const hour = getCurrentHour(tz);
-
-            // Ikke send utenfor aktive timer
-            const startHour = config.activeHoursStart || 7;
-            const endHour = config.activeHoursEnd || 22;
-            if (hour < startHour || hour >= endHour) continue;
+            if (!isWithinActiveWindow(config, tz)) continue;
 
             // Sjekk intervall
             const interval = config.movementInterval || 120;
@@ -383,8 +414,9 @@ exports.movementReminder = onSchedule(
 
             if (lastSentDoc.exists) {
                 const lastSent = lastSentDoc.data().sentAt?.toDate();
-                if (lastSent) {
-                    const minutesSinceLast = (Date.now() - lastSent.getTime()) / 60000;
+                const lastSentMs = lastSentDoc.data().sentAtMs || (lastSent ? lastSent.getTime() : 0);
+                if (lastSentMs) {
+                    const minutesSinceLast = (Date.now() - lastSentMs) / 60000;
                     if (minutesSinceLast < interval) continue;
                 }
             }
@@ -400,7 +432,8 @@ exports.movementReminder = onSchedule(
             if (result.success > 0) {
                 await db.collection('users').doc(userId)
                     .collection('_pushLog').doc('lastMovementPush').set({
-                        sentAt: FieldValue.serverTimestamp()
+                        sentAt: FieldValue.serverTimestamp(),
+                        sentAtMs: Date.now()
                     });
                 totalSent++;
             }
@@ -437,6 +470,7 @@ exports.checkinReminder = onSchedule(
             const config = userDoc.data().reminderConfig || {};
 
             const tz = config.timezone || 'Europe/Oslo';
+            if (!isWithinActiveWindow(config, tz)) continue;
             const currentTime = getCurrentTimeInTimezone(tz);
             const checkinTime = config.checkinTime || '09:00';
             const today = getTodayString(tz);
@@ -476,7 +510,8 @@ exports.checkinReminder = onSchedule(
             if (result.success > 0) {
                 await db.collection('users').doc(userId)
                     .collection('_pushLog').doc('lastCheckinPush').set({
-                        sentAt: FieldValue.serverTimestamp()
+                        sentAt: FieldValue.serverTimestamp(),
+                        sentAtMs: Date.now()
                     });
                 totalSent++;
             }

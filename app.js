@@ -1,10 +1,10 @@
 /* =========================================
-   DAGLIG HELSE – App Logic
-    Versjon 3.0.0
+    DAGLIG HELSE – App Logic
+     Versjon 3.0.1
    For besteforeldre / eldre brukere
    ========================================= */
 
-const APP_VERSION = '3.0.0';
+const APP_VERSION = '3.0.1';
 const ADMIN_EMAILS = ['halvor.thorsenh@gmail.com'];
 let isAdmin = false;
 
@@ -42,6 +42,8 @@ let settings = {
     movementInterval: 120,
     checkinReminder: false,
     checkinTime: '09:00',
+    activeStartTime: '07:00',
+    activeEndTime: '22:00',
     soundEnabled: true,
     fontSize: 'normal'
 };
@@ -59,6 +61,13 @@ let shoppingList = [];
 let reminderTimers = {};
 let lastWaterReminder = 0;
 let lastMovementReminder = 0;
+let lastReminderShown = {
+    water: 0,
+    medicine: 0,
+    movement: 0,
+    checkin: 0,
+    general: 0
+};
 
 // Firebase Cloud Messaging
 let messaging = null;
@@ -1714,6 +1723,8 @@ function updateSettingsView() {
     document.getElementById('settings-movement-interval').value = settings.movementInterval || 120;
     document.getElementById('settings-checkin-reminder').checked = settings.checkinReminder;
     document.getElementById('settings-checkin-time').value = settings.checkinTime || '09:00';
+    document.getElementById('settings-active-start').value = settings.activeStartTime || '07:00';
+    document.getElementById('settings-active-end').value = settings.activeEndTime || '22:00';
     document.getElementById('settings-sound').checked = settings.soundEnabled !== false;
     document.getElementById('app-version').textContent = APP_VERSION;
     document.getElementById('settings-email').textContent = currentUser?.email || '';
@@ -1839,6 +1850,8 @@ async function saveSettings() {
     settings.movementInterval = parseInt(document.getElementById('settings-movement-interval').value) || 120;
     settings.checkinReminder = document.getElementById('settings-checkin-reminder').checked;
     settings.checkinTime = document.getElementById('settings-checkin-time').value || '09:00';
+    settings.activeStartTime = document.getElementById('settings-active-start').value || '07:00';
+    settings.activeEndTime = document.getElementById('settings-active-end').value || '22:00';
     settings.soundEnabled = document.getElementById('settings-sound').checked;
     
     await saveSettingsToFirebase();
@@ -1902,6 +1915,11 @@ function initializeMessaging() {
                 const title = notification.title || data.title || 'Påminnelse';
                 const body = notification.body || data.body || '';
                 const type = data.type || 'general';
+
+                if (shouldSuppressDuplicateReminder(type)) {
+                    console.log('[FCM] Hopper over duplikat-varsling i forgrunn:', type);
+                    return;
+                }
                 
                 // Vis in-app toast
                 showReminderToast(
@@ -1964,7 +1982,7 @@ async function registerFCMToken() {
     
     try {
         // Registrer FCM service worker
-        const swRegistration = await navigator.serviceWorker.register('firebase-messaging-sw.js?v=3.0.0', { updateViaCache: 'none' });
+        const swRegistration = await navigator.serviceWorker.register('firebase-messaging-sw.js?v=3.0.1', { updateViaCache: 'none' });
         await swRegistration.update();
         
         // Hent token
@@ -2010,7 +2028,10 @@ async function syncReminderSettingsToCloud() {
     const ref = getUserRef();
     if (!ref) return;
     
-    const now = new Date();
+    const activeStartTime = settings.activeStartTime || '07:00';
+    const activeEndTime = settings.activeEndTime || '22:00';
+    const activeHoursStart = parseInt(activeStartTime.split(':')[0], 10);
+    const activeHoursEnd = parseInt(activeEndTime.split(':')[0], 10);
     const reminderConfig = {
         // Vannpåminnelser
         waterReminder: settings.waterReminder || false,
@@ -2036,8 +2057,10 @@ async function syncReminderSettingsToCloud() {
         
         // Status
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Oslo',
-        activeHoursStart: 7,  // Ikke send varsler før kl. 07
-        activeHoursEnd: 22,   // Ikke send varsler etter kl. 22
+        activeStartTime: activeStartTime,
+        activeEndTime: activeEndTime,
+        activeHoursStart: Number.isNaN(activeHoursStart) ? 7 : activeHoursStart,
+        activeHoursEnd: Number.isNaN(activeHoursEnd) ? 22 : activeHoursEnd,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     
@@ -2095,15 +2118,47 @@ function stopAllReminders() {
     reminderTimers = {};
 }
 
+function timeToMinutesLocal(timeStr) {
+    if (!timeStr || !timeStr.includes(':')) return 0;
+    const [h, m] = timeStr.split(':').map(Number);
+    return (h * 60) + m;
+}
+
+function isWithinActiveReminderWindow() {
+    const start = settings.activeStartTime || '07:00';
+    const end = settings.activeEndTime || '22:00';
+    const now = new Date();
+    const nowMinutes = (now.getHours() * 60) + now.getMinutes();
+    const startMinutes = timeToMinutesLocal(start);
+    const endMinutes = timeToMinutesLocal(end);
+
+    if (startMinutes === endMinutes) return true;
+    if (startMinutes < endMinutes) {
+        return nowMinutes >= startMinutes && nowMinutes < endMinutes;
+    }
+    return nowMinutes >= startMinutes || nowMinutes < endMinutes;
+}
+
+function shouldSuppressDuplicateReminder(type, windowMs = 90000) {
+    const key = type || 'general';
+    const now = Date.now();
+    const last = lastReminderShown[key] || 0;
+    if ((now - last) < windowMs) return true;
+    lastReminderShown[key] = now;
+    return false;
+}
+
 function checkWaterReminder() {
+    if (!isWithinActiveReminderWindow()) return;
     if (todayData.water.count >= settings.waterGoal) return;
     
     const now = Date.now();
     const intervalMs = (settings.waterInterval || 60) * 60 * 1000;
     
     if (now - lastWaterReminder >= intervalMs) {
+        if (shouldSuppressDuplicateReminder('water')) return;
         showReminderToast('💧', 'På tide å drikke et glass vann!', 'water');
-        sendNotification('💧 Vannpåminnelse', 'Husk å drikke et glass vann!');
+        sendNotification('💧 Vannpåminnelse', 'Husk å drikke et glass vann!', 'water');
         lastWaterReminder = now;
     }
 }
@@ -2120,8 +2175,9 @@ function checkMedicineReminder() {
                     t => t.medicineId === med.id && t.scheduledTime === time
                 );
                 if (!alreadyTaken) {
+                    if (shouldSuppressDuplicateReminder('medicine')) return;
                     showReminderToast('💊', `Tid for ${med.name}! (${med.dosage || ''})`, 'medicine');
-                    sendNotification('💊 Medisinpåminnelse', `Tid for ${med.name}!`);
+                    sendNotification('💊 Medisinpåminnelse', `Tid for ${med.name}!`, 'medicine');
                 }
             }
         });
@@ -2129,25 +2185,29 @@ function checkMedicineReminder() {
 }
 
 function checkMovementReminder() {
+    if (!isWithinActiveReminderWindow()) return;
     const now = Date.now();
     const intervalMs = (settings.movementInterval || 120) * 60 * 1000;
     
     if (now - lastMovementReminder >= intervalMs) {
+        if (shouldSuppressDuplicateReminder('movement')) return;
         showReminderToast('🚶', 'Tid for litt bevegelse! Rør litt på deg.', 'movement');
-        sendNotification('🚶 Bevegelsespåminnelse', 'Tid for å røre litt på deg!');
+        sendNotification('🚶 Bevegelsespåminnelse', 'Tid for å røre litt på deg!', 'movement');
         lastMovementReminder = now;
     }
 }
 
 function checkCheckinReminder() {
+    if (!isWithinActiveReminderWindow()) return;
     if (todayData.checkedIn) return;
     
     const currentTime = getTimeString();
     const checkinTime = settings.checkinTime || '09:00';
     
     if (currentTime === checkinTime) {
+        if (shouldSuppressDuplicateReminder('checkin')) return;
         showReminderToast('🌅', 'God morgen! Husk å sjekke inn.', 'checkin');
-        sendNotification('🌅 God morgen!', 'Husk å gjøre din daglige innsjekk.');
+        sendNotification('🌅 God morgen!', 'Husk å gjøre din daglige innsjekk.', 'checkin');
     }
 }
 
@@ -2185,7 +2245,7 @@ function handleReminderAction() {
     // Handled by dynamic onclick
 }
 
-function sendNotification(title, body) {
+function sendNotification(title, body, type = 'general') {
     // Lokalt varsel (vises kun når appen er åpen)
     if ('Notification' in window && Notification.permission === 'granted') {
         try {
@@ -2196,8 +2256,8 @@ function sendNotification(title, body) {
                         body: body,
                         icon: 'icons/icon-192.png',
                         badge: 'icons/icon-192.png',
-                        tag: 'daglig-helse-local-' + Date.now(),
-                        renotify: true,
+                        tag: `daglig-helse-local-${type}`,
+                        renotify: false,
                         vibrate: [200, 100, 200],
                         requireInteraction: true
                     });
@@ -2207,8 +2267,8 @@ function sendNotification(title, body) {
                     body: body,
                     icon: 'icons/icon-192.png',
                     badge: 'icons/icon-192.png',
-                    tag: 'daglig-helse-' + Date.now(),
-                    renotify: true
+                    tag: `daglig-helse-${type}`,
+                    renotify: false
                 });
             }
         } catch (err) {
@@ -2275,7 +2335,7 @@ document.addEventListener('click', (e) => {
 function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
         // Registrer caching service worker
-        navigator.serviceWorker.register('sw.js?v=3.0.0', { updateViaCache: 'none' })
+        navigator.serviceWorker.register('sw.js?v=3.0.1', { updateViaCache: 'none' })
             .then(reg => {
                 console.log('[SW] Cache-worker registrert:', reg.scope);
                 reg.update();

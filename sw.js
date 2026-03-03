@@ -1,14 +1,14 @@
 // =========================================
-// Service Worker – Daglig Helse v3.0.0
+// Service Worker – Daglig Helse v3.0.1
 // =========================================
-const CACHE_NAME = 'daglig-helse-v3.0.0';
+const CACHE_NAME = 'daglig-helse-v3.0.1';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
-    './style.css?v=3.0.0',
-    './app.js?v=3.0.0',
-    './firebase-config.js?v=3.0.0',
-    './manifest.json?v=3.0.0',
+    './style.css?v=3.0.1',
+    './app.js?v=3.0.1',
+    './firebase-config.js?v=3.0.1',
+    './manifest.json?v=3.0.1',
     './icons/icon.svg',
     './icons/icon-192.png',
     './icons/icon-512.png'
@@ -27,7 +27,7 @@ const NETWORK_ONLY_PATTERNS = [
 
 // ---- INSTALL ----
 self.addEventListener('install', event => {
-    console.log('[SW] Installerer v3.0.0...');
+    console.log('[SW] Installerer v3.0.1...');
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => cache.addAll(ASSETS_TO_CACHE))
@@ -37,7 +37,7 @@ self.addEventListener('install', event => {
 
 // ---- ACTIVATE ----
 self.addEventListener('activate', event => {
-    console.log('[SW] Aktiverer v3.0.0...');
+    console.log('[SW] Aktiverer v3.0.1...');
     event.waitUntil(
         caches.keys().then(cacheNames => {
             return Promise.all(
