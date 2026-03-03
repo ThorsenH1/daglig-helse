@@ -15,6 +15,7 @@ const { getMessaging } = require("firebase-admin/messaging");
 // Initialiser Firebase Admin
 initializeApp();
 const db = getFirestore();
+const APP_URL = "https://thorsenh1.github.io/daglig-helse/";
 
 // Begrens kostnader
 setGlobalOptions({ maxInstances: 5, region: "europe-west1" });
@@ -116,7 +117,7 @@ async function sendPushToUser(userId, title, body, type) {
                     title: title,
                     body: body,
                     tag: `daglig-helse-${type}-${Date.now()}`,
-                    url: './index.html'
+                    url: APP_URL
                 },
                 webpush: {
                     notification: {
@@ -128,7 +129,7 @@ async function sendPushToUser(userId, title, body, type) {
                         renotify: true
                     },
                     fcmOptions: {
-                        link: './index.html'
+                        link: APP_URL
                     }
                 }
             });
@@ -160,11 +161,11 @@ async function sendPushToUser(userId, title, body, type) {
 
 
 // =============================================
-// VANNPÅMINNELSER – Kjører hvert 15. minutt
+// VANNPÅMINNELSER – Kjører hvert minutt
 // =============================================
 exports.waterReminder = onSchedule(
     {
-        schedule: "every 15 minutes",
+        schedule: "every 1 minutes",
         timeZone: "Europe/Oslo",
         retryCount: 0,
         memory: "256MiB"

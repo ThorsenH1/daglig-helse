@@ -1833,7 +1833,7 @@ async function saveSettings() {
     settings.name = document.getElementById('settings-name').value.trim();
     settings.waterGoal = parseInt(document.getElementById('settings-water-goal').value) || 8;
     settings.waterReminder = document.getElementById('settings-water-reminder').checked;
-    settings.waterInterval = parseInt(document.getElementById('settings-water-interval').value) || 60;
+    settings.waterInterval = Math.max(1, parseInt(document.getElementById('settings-water-interval').value) || 60);
     settings.medicineReminder = document.getElementById('settings-medicine-reminder').checked;
     settings.movementReminder = document.getElementById('settings-movement-reminder').checked;
     settings.movementInterval = parseInt(document.getElementById('settings-movement-interval').value) || 120;
@@ -1852,7 +1852,12 @@ async function saveSettings() {
     // Hvis påminnelser er aktivert, sørg for at vi har FCM-token
     if (settings.waterReminder || settings.medicineReminder || 
         settings.movementReminder || settings.checkinReminder) {
+        if ('Notification' in window && Notification.permission === 'default') {
+            const permission = await Notification.requestPermission();
+            console.log('[FCM] Varslingstillatelse (fra innstillinger):', permission);
+        }
         await registerFCMToken();
+        updatePushStatus();
     }
     
     // Oppdater greeting
@@ -1923,7 +1928,12 @@ function initializeMessaging() {
 async function requestNotificationPermission() {
     // Steg 1: Be om tillatelse
     if ('Notification' in window) {
+        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
         if (Notification.permission === 'default') {
+            if (isIOS) {
+                console.log('[FCM] iOS: Tillatelse må gis via brukerhandling (f.eks. "Lagre innstillinger" eller "Test varslinger").');
+                return;
+            }
             // Vent litt slik at bruker har sett appen først
             await new Promise(r => setTimeout(r, 2000));
             const permission = await Notification.requestPermission();
