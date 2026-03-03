@@ -1,14 +1,14 @@
 // =========================================
-// Service Worker – Daglig Helse v2.1.2
+// Service Worker – Daglig Helse v3.0.0
 // =========================================
-const CACHE_NAME = 'daglig-helse-v2.1.2';
+const CACHE_NAME = 'daglig-helse-v3.0.0';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
-    './style.css?v=2.1.2',
-    './app.js?v=2.1.2',
-    './firebase-config.js?v=2.1.2',
-    './manifest.json?v=2.1.2',
+    './style.css?v=3.0.0',
+    './app.js?v=3.0.0',
+    './firebase-config.js?v=3.0.0',
+    './manifest.json?v=3.0.0',
     './icons/icon.svg',
     './icons/icon-192.png',
     './icons/icon-512.png'
@@ -27,7 +27,7 @@ const NETWORK_ONLY_PATTERNS = [
 
 // ---- INSTALL ----
 self.addEventListener('install', event => {
-    console.log('[SW] Installerer v2.1.2...');
+    console.log('[SW] Installerer v3.0.0...');
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => cache.addAll(ASSETS_TO_CACHE))
@@ -37,7 +37,7 @@ self.addEventListener('install', event => {
 
 // ---- ACTIVATE ----
 self.addEventListener('activate', event => {
-    console.log('[SW] Aktiverer v2.1.2...');
+    console.log('[SW] Aktiverer v3.0.0...');
     event.waitUntil(
         caches.keys().then(cacheNames => {
             return Promise.all(
@@ -62,6 +62,24 @@ self.addEventListener('fetch', event => {
         return;
     }
     
+    // Network-first for navigering (hindrer at gammel index/app blir "låst")
+    if (event.request.mode === 'navigate') {
+        event.respondWith(
+            fetch(event.request)
+                .then(networkResponse => {
+                    if (networkResponse && networkResponse.ok) {
+                        const responseClone = networkResponse.clone();
+                        caches.open(CACHE_NAME).then(cache => {
+                            cache.put('./index.html', responseClone);
+                        });
+                    }
+                    return networkResponse;
+                })
+                .catch(() => caches.match('./index.html'))
+        );
+        return;
+    }
+
     // Stale-while-revalidate for andre ressurser
     event.respondWith(
         caches.match(event.request).then(cachedResponse => {

@@ -1,10 +1,10 @@
 /* =========================================
    DAGLIG HELSE – App Logic
-    Versjon 2.1.2
+    Versjon 3.0.0
    For besteforeldre / eldre brukere
    ========================================= */
 
-const APP_VERSION = '2.1.2';
+const APP_VERSION = '3.0.0';
 const ADMIN_EMAIL = 'halvor.thorsenh1@gmail.com';
 let isAdmin = false;
 
@@ -117,13 +117,13 @@ function hideLoading() {
 // ==========================================
 // AUTH
 // ==========================================
-function handleAuthStateChanged(user) {
-    hideLoading();
+async function handleAuthStateChanged(user) {
     if (user) {
+        const loadStart = Date.now();
         currentUser = user;
         isAdmin = (user.email === ADMIN_EMAIL);
         document.getElementById('login-view').style.display = 'none';
-        document.getElementById('app-container').style.display = 'block';
+        document.getElementById('app-container').style.display = 'none';
         
         // Vis/skjul admin-knapp
         const adminBtn = document.getElementById('btn-admin');
@@ -132,8 +132,17 @@ function handleAuthStateChanged(user) {
         // Lagre innloggingsmetadata
         updateLastLogin(user);
         
-        // Last brukerdata
-        loadAllData();
+        // Last brukerdata (vent til dette er ferdig)
+        await loadAllData();
+
+        // Sikre minst 2 sekunder loading for å unngå at gamle/null verdier blinker
+        const elapsed = Date.now() - loadStart;
+        if (elapsed < 2000) {
+            await new Promise(resolve => setTimeout(resolve, 2000 - elapsed));
+        }
+
+        hideLoading();
+        document.getElementById('app-container').style.display = 'block';
         
         // Start påminnelser
         setupReminders();
@@ -146,6 +155,7 @@ function handleAuthStateChanged(user) {
         
         showView('home');
     } else {
+        hideLoading();
         currentUser = null;
         document.getElementById('login-view').style.display = 'block';
         document.getElementById('app-container').style.display = 'none';
@@ -1943,7 +1953,7 @@ async function registerFCMToken() {
     
     try {
         // Registrer FCM service worker
-        const swRegistration = await navigator.serviceWorker.register('firebase-messaging-sw.js?v=2.1.2', { updateViaCache: 'none' });
+        const swRegistration = await navigator.serviceWorker.register('firebase-messaging-sw.js?v=3.0.0', { updateViaCache: 'none' });
         await swRegistration.update();
         
         // Hent token
@@ -2254,7 +2264,7 @@ document.addEventListener('click', (e) => {
 function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
         // Registrer caching service worker
-        navigator.serviceWorker.register('sw.js?v=2.1.2', { updateViaCache: 'none' })
+        navigator.serviceWorker.register('sw.js?v=3.0.0', { updateViaCache: 'none' })
             .then(reg => {
                 console.log('[SW] Cache-worker registrert:', reg.scope);
                 reg.update();
