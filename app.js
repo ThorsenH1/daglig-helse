@@ -1713,7 +1713,7 @@ function updatePushStatus() {
     // Sjekk 4: FCM Token
     if (fcmToken) {
         html += '<div class="push-status-item push-status-ok">✅ Push-varsler er aktivert og klar!</div>';
-    } else if (VAPID_KEY === '__VAPID_KEY_HER__') {
+    } else if (VAPID_KEY === 'BMdx0GGDk_mPsEJuOlYAoM6vJy7a4LlYg2fOZA5CGxEca1dt8n05xDzxo2k43XXpvCIavM4uHx9AlpoFbQAOBOA') {
         html += '<div class="push-status-item push-status-warning">⚠️ VAPID-nøkkel mangler (utvikler må konfigurere denne)</div>';
     } else {
         html += '<div class="push-status-item push-status-warning">⏳ Push-varsler er ikke koblet opp ennå</div>';
