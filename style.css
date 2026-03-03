@@ -776,6 +776,31 @@ label {
     gap: var(--spacing-sm);
 }
 
+.medicine-batch-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+.btn-batch-medicine {
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    border: 2px solid var(--color-primary);
+    border-radius: 999px;
+    padding: 8px 12px;
+    font-size: var(--font-size-sm);
+    min-height: 40px;
+}
+
+.btn-batch-medicine:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    border-color: var(--color-border);
+    color: var(--color-text-light);
+    background: var(--color-bg-card);
+}
+
 .medicine-item {
     background: var(--color-bg-card);
     border-radius: var(--btn-radius);

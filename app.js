@@ -1,10 +1,10 @@
 /* =========================================
    DAGLIG HELSE – App Logic
-    Versjon 2.1.1
+    Versjon 2.1.2
    For besteforeldre / eldre brukere
    ========================================= */
 
-const APP_VERSION = '2.1.1';
+const APP_VERSION = '2.1.2';
 const ADMIN_EMAIL = 'halvor.thorsenh1@gmail.com';
 let isAdmin = false;
 
@@ -822,7 +822,15 @@ async function takeMedicine(medicineId, scheduledTime) {
         scheduledTime: scheduledTime,
         takenTime: getTimeString()
     });
+
+    await saveMedicineTakenLog();
     
+    updateMedicineView();
+    updateDashboard();
+    showConfirm(`✅ ${medicine.name} registrert som tatt!`);
+}
+
+async function saveMedicineTakenLog() {
     const ref = getUserRef();
     if (!ref) return;
     
@@ -830,15 +838,66 @@ async function takeMedicine(medicineId, scheduledTime) {
         taken: todayData.medicineTaken,
         updated: firebase.firestore.FieldValue.serverTimestamp()
     });
-    
+}
+
+async function takeAllMedicinesAtTime(scheduledTime) {
+    const pendingMeds = medicines
+        .filter(med => med.active !== false && (med.times || []).includes(scheduledTime))
+        .filter(med => !todayData.medicineTaken.some(
+            t => t.medicineId === med.id && t.scheduledTime === scheduledTime
+        ));
+
+    if (pendingMeds.length === 0) {
+        showConfirm(`ℹ️ Alle doser for kl. ${scheduledTime} er allerede registrert`);
+        return;
+    }
+
+    const takenTime = getTimeString();
+    pendingMeds.forEach(med => {
+        todayData.medicineTaken.push({
+            medicineId: med.id,
+            name: med.name,
+            dosage: med.dosage,
+            scheduledTime: scheduledTime,
+            takenTime: takenTime
+        });
+    });
+
+    await saveMedicineTakenLog();
     updateMedicineView();
     updateDashboard();
-    showConfirm(`✅ ${medicine.name} registrert som tatt!`);
+    showConfirm(`✅ Registrerte ${pendingMeds.length} medisiner for kl. ${scheduledTime}`);
 }
 
 function updateMedicineView() {
     const todayList = document.getElementById('medicine-today-list');
     const takenList = document.getElementById('medicine-taken-list');
+    const batchActions = document.getElementById('medicine-batch-actions');
+
+    const activeMeds = medicines.filter(med => med.active !== false);
+    const uniqueTimes = [...new Set(activeMeds.flatMap(med => med.times || []))].sort();
+    if (batchActions) {
+        const batchButtons = uniqueTimes.map(time => {
+            const pendingCount = activeMeds.filter(med =>
+                (med.times || []).includes(time) &&
+                !todayData.medicineTaken.some(t => t.medicineId === med.id && t.scheduledTime === time)
+            ).length;
+
+            if (pendingCount === 0) {
+                return `<button class="btn btn-batch-medicine" disabled>✅ Kl. ${time} tatt</button>`;
+            }
+
+            return `
+                <button class="btn btn-batch-medicine" onclick="takeAllMedicinesAtTime('${time}')">
+                    💊 Ta alle kl. ${time} (${pendingCount})
+                </button>
+            `;
+        });
+
+        batchActions.innerHTML = batchButtons.length > 0
+            ? batchButtons.join('')
+            : '<p class="empty-state">Ingen klokkeslett satt ennå</p>';
+    }
     
     if (medicines.length === 0) {
         todayList.innerHTML = '<p class="empty-state">Ingen medisiner lagt til ennå. Trykk "Legg til ny medisin" under.</p>';
@@ -1713,7 +1772,7 @@ function updatePushStatus() {
     // Sjekk 4: FCM Token
     if (fcmToken) {
         html += '<div class="push-status-item push-status-ok">✅ Push-varsler er aktivert og klar!</div>';
-    } else if (VAPID_KEY === 'BMdx0GGDk_mPsEJuOlYAoM6vJy7a4LlYg2fOZA5CGxEca1dt8n05xDzxo2k43XXpvCIavM4uHx9AlpoFbQAOBOA') {
+    } else if (VAPID_KEY === '__VAPID_KEY_HER__') {
         html += '<div class="push-status-item push-status-warning">⚠️ VAPID-nøkkel mangler (utvikler må konfigurere denne)</div>';
     } else {
         html += '<div class="push-status-item push-status-warning">⏳ Push-varsler er ikke koblet opp ennå</div>';
@@ -1812,7 +1871,7 @@ function applyFontSize(size) {
 // VAPID-nøkkel fra Firebase Console → Prosjektinnstillinger → Cloud Messaging → Web Push-sertifikater
 // Brukeren MÅ generere denne og erstatte verdien under.
 // Se README for instruksjoner.
-const VAPID_KEY = '__VAPID_KEY_HER__';
+const VAPID_KEY = 'BMdx0GGDk_mPsEJuOlYAoM6vJy7a4LlYg2fOZA5CGxEca1dt8n05xDzxo2k43XXpvCIavM4uHx9AlpoFbQAOBOA';
 
 function initializeMessaging() {
     try {
@@ -1884,7 +1943,8 @@ async function registerFCMToken() {
     
     try {
         // Registrer FCM service worker
-        const swRegistration = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+        const swRegistration = await navigator.serviceWorker.register('firebase-messaging-sw.js?v=2.1.2', { updateViaCache: 'none' });
+        await swRegistration.update();
         
         // Hent token
         const token = await messaging.getToken({
@@ -1918,7 +1978,8 @@ async function saveFCMToken(token) {
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     
-    await ref.collection('fcmTokens').doc(token.substring(0, 40)).set(deviceInfo);
+    const tokenId = token.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 120);
+    await ref.collection('fcmTokens').doc(tokenId).set(deviceInfo);
     console.log('[FCM] Token lagret i Firestore');
 }
 
