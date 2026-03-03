@@ -2254,7 +2254,7 @@ document.addEventListener('click', (e) => {
 function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
         // Registrer caching service worker
-        navigator.serviceWorker.register('sw.js?v=2.1.1', { updateViaCache: 'none' })
+        navigator.serviceWorker.register('sw.js?v=2.1.2', { updateViaCache: 'none' })
             .then(reg => {
                 console.log('[SW] Cache-worker registrert:', reg.scope);
                 reg.update();
