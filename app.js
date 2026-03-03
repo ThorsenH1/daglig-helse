@@ -5,7 +5,7 @@
    ========================================= */
 
 const APP_VERSION = '3.0.0';
-const ADMIN_EMAIL = 'halvor.thorsenh1@gmail.com';
+const ADMIN_EMAILS = ['halvor.thorsenh1@gmail.com', 'halvor.thorsenh@gmail.com'];
 let isAdmin = false;
 
 // ==========================================
@@ -121,7 +121,8 @@ async function handleAuthStateChanged(user) {
     if (user) {
         const loadStart = Date.now();
         currentUser = user;
-        isAdmin = (user.email === ADMIN_EMAIL);
+        const userEmail = (user.email || '').trim().toLowerCase();
+        isAdmin = ADMIN_EMAILS.includes(userEmail);
         document.getElementById('login-view').style.display = 'none';
         document.getElementById('app-container').style.display = 'none';
         
