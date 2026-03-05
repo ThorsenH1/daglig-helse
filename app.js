@@ -591,7 +591,18 @@ function updateRemindersDisplay() {
     
     // Vannpåminnelse
     if (settings.waterReminder && todayData.water.count < settings.waterGoal) {
-        const nextWaterTime = new Date(lastWaterReminder + settings.waterInterval * 60000);
+        let nextWaterTime = new Date(lastWaterReminder + settings.waterInterval * 60000);
+        // Hopp til neste aktive vindu hvis tidspunktet faller utenfor
+        const startMin = timeToMinutesLocal(settings.activeStartTime || '07:00');
+        const endMin = timeToMinutesLocal(settings.activeEndTime || '22:00');
+        const nextMin = nextWaterTime.getHours() * 60 + nextWaterTime.getMinutes();
+        if (startMin < endMin && (nextMin < startMin || nextMin >= endMin)) {
+            // Sett til neste dag kl. start
+            const tomorrow = new Date(nextWaterTime);
+            if (nextMin >= endMin) tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
+            nextWaterTime = tomorrow;
+        }
         if (nextWaterTime > now) {
             reminders.push({
                 time: nextWaterTime.toLocaleTimeString('no-NO', { hour: '2-digit', minute: '2-digit' }),

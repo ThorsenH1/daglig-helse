@@ -6,16 +6,39 @@ service cloud.firestore {
     function isAdmin() {
       return request.auth != null && request.auth.token.email == 'halvor.thorsenh@gmail.com';
     }
+
+    // Sjekk om innlogget bruker er venn av userId og har tillatelse for gitt subcollection
+    function friendCanRead(userId, sub) {
+      let f = get(/databases/$(database)/documents/users/$(userId)/friends/$(request.auth.uid));
+      return f != null && f.data.permissions != null && (
+        (sub == 'waterLogs'    && f.data.permissions.water    == true) ||
+        (sub == 'medicineLogs' && f.data.permissions.medicine == true) ||
+        (sub == 'medicines'    && f.data.permissions.medicine == true) ||
+        (sub == 'bathroomLogs' && f.data.permissions.bathroom == true) ||
+        (sub == 'healthLogs'   && f.data.permissions.health   == true) ||
+        (sub == 'sleepLogs'    && f.data.permissions.sleep    == true) ||
+        (sub == 'movementLogs' && f.data.permissions.movement == true) ||
+        (sub == 'diaryLogs'    && f.data.permissions.diary    == true) ||
+        (sub == 'checkins'     && f.data.permissions.checkin  == true)
+      );
+    }
+
+    function isFriendOf(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)/friends/$(request.auth.uid));
+    }
     
     // Brukere kan lese/skrive sine egne data
     // Admin kan lese ALLE brukeres data
+    // Venner kan lese brukerdokumentet (for settings som waterGoal)
     match /users/{userId} {
-      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin() || isFriendOf(userId));
       allow write: if request.auth != null && request.auth.uid == userId;
       
-      // Alle sub-collections under brukeren (inkl. fcmTokens og _pushLog)
+      // Sub-collections: eier, admin, eller venn med relevant tillatelse
       match /{subcollection}/{document=**} {
-        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow read: if request.auth != null && (
+          request.auth.uid == userId || isAdmin() || friendCanRead(userId, subcollection)
+        );
         allow write: if request.auth != null && request.auth.uid == userId;
       }
 

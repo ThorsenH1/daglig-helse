@@ -80,7 +80,11 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // Stale-while-revalidate for andre ressurser
+    // Stale-while-revalidate for andre ressurser (kun GET kan caches)
+    if (event.request.method !== 'GET') {
+        return;
+    }
+
     event.respondWith(
         caches.match(event.request).then(cachedResponse => {
             const fetchPromise = fetch(event.request)

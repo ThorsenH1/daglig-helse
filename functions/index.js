@@ -38,7 +38,7 @@ function getCurrentTimeInTimezone(timezone) {
             hour12: false
         });
         return formatter.format(now);
-    } catch {
+    } catch (_e) {
         const now = new Date();
         // Fallback: UTC+1 (CET)
         const cetTime = new Date(now.getTime() + 1 * 60 * 60 * 1000);
@@ -59,7 +59,7 @@ function getTodayString(timezone) {
             day: '2-digit'
         });
         return formatter.format(now); // YYYY-MM-DD
-    } catch {
+    } catch (_e) {
         return new Date().toISOString().split('T')[0];
     }
 }
@@ -76,7 +76,7 @@ function getCurrentHour(timezone) {
             hour12: false
         });
         return parseInt(formatter.format(now));
-    } catch {
+    } catch (_e) {
         return new Date().getHours();
     }
 }
@@ -92,7 +92,7 @@ function getCurrentMinutesInTimezone(timezone) {
         });
         const parts = formatter.format(now).split(':').map(Number);
         return (parts[0] * 60) + parts[1];
-    } catch {
+    } catch (_e) {
         const now = new Date();
         return (now.getHours() * 60) + now.getMinutes();
     }
@@ -106,8 +106,8 @@ function timeStringToMinutes(value, fallbackMinutes) {
 }
 
 function isWithinActiveWindow(config, timezone) {
-    const fallbackStart = (config.activeHoursStart ?? 7) * 60;
-    const fallbackEnd = (config.activeHoursEnd ?? 22) * 60;
+    const fallbackStart = (config.activeHoursStart != null ? config.activeHoursStart : 7) * 60;
+    const fallbackEnd = (config.activeHoursEnd != null ? config.activeHoursEnd : 22) * 60;
     const startMinutes = timeStringToMinutes(config.activeStartTime, fallbackStart);
     const endMinutes = timeStringToMinutes(config.activeEndTime, fallbackEnd);
     const nowMinutes = getCurrentMinutesInTimezone(timezone);
@@ -230,8 +230,9 @@ exports.waterReminder = onSchedule(
                 .collection('_pushLog').doc('lastWaterPush').get();
 
             if (lastSentDoc.exists) {
-                const lastSent = lastSentDoc.data().sentAt?.toDate();
-                const lastSentMs = lastSentDoc.data().sentAtMs || (lastSent ? lastSent.getTime() : 0);
+                const _d = lastSentDoc.data();
+                const lastSent = _d.sentAt ? _d.sentAt.toDate() : null;
+                const lastSentMs = _d.sentAtMs || (lastSent ? lastSent.getTime() : 0);
                 if (lastSentMs) {
                     const minutesSinceLast = (Date.now() - lastSentMs) / 60000;
                     if (minutesSinceLast < interval) continue; // For tidlig
@@ -331,7 +332,8 @@ exports.medicineReminder = onSchedule(
                         .collection('_pushLog').doc(pushLogId).get();
 
                     if (pushLogDoc.exists) {
-                        const lastSent = pushLogDoc.data().sentAt?.toDate();
+                        const _pd = pushLogDoc.data();
+                        const lastSent = _pd.sentAt ? _pd.sentAt.toDate() : null;
                         if (lastSent) {
                             const sentDate = lastSent.toISOString().split('T')[0];
                             if (sentDate === today) continue; // Allerede sendt i dag
@@ -397,8 +399,9 @@ exports.movementReminder = onSchedule(
                 .collection('_pushLog').doc('lastMovementPush').get();
 
             if (lastSentDoc.exists) {
-                const lastSent = lastSentDoc.data().sentAt?.toDate();
-                const lastSentMs = lastSentDoc.data().sentAtMs || (lastSent ? lastSent.getTime() : 0);
+                const _d = lastSentDoc.data();
+                const lastSent = _d.sentAt ? _d.sentAt.toDate() : null;
+                const lastSentMs = _d.sentAtMs || (lastSent ? lastSent.getTime() : 0);
                 if (lastSentMs) {
                     const minutesSinceLast = (Date.now() - lastSentMs) / 60000;
                     if (minutesSinceLast < interval) continue;
@@ -476,7 +479,8 @@ exports.checkinReminder = onSchedule(
                 .collection('_pushLog').doc('lastCheckinPush').get();
 
             if (pushLogDoc.exists) {
-                const lastSent = pushLogDoc.data().sentAt?.toDate();
+                const _pd = pushLogDoc.data();
+                const lastSent = _pd.sentAt ? _pd.sentAt.toDate() : null;
                 if (lastSent) {
                     const sentDate = lastSent.toISOString().split('T')[0];
                     if (sentDate === today) continue;
@@ -516,7 +520,7 @@ exports.sendFriendReminder = onDocumentCreated(
         memory: "256MiB"
     },
     async (event) => {
-        const data = event.data?.data();
+        const data = event.data && event.data.data();
         if (!data) return;
 
         const { toUid, fromUid, fromName, title, body, type } = data;
