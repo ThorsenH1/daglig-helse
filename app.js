@@ -2148,6 +2148,12 @@ function shouldSuppressDuplicateReminder(type, windowMs = 90000) {
     return false;
 }
 
+function shouldUseLocalNotificationFallback() {
+    const hasGrantedPermission = typeof Notification !== 'undefined' && Notification.permission === 'granted';
+    // Når FCM-token finnes og varsler er tillatt, lar vi sky-varsler være primær kanal.
+    return !(fcmToken && hasGrantedPermission);
+}
+
 function checkWaterReminder() {
     if (!isWithinActiveReminderWindow()) return;
     if (todayData.water.count >= settings.waterGoal) return;
@@ -2158,7 +2164,9 @@ function checkWaterReminder() {
     if (now - lastWaterReminder >= intervalMs) {
         if (shouldSuppressDuplicateReminder('water')) return;
         showReminderToast('💧', 'På tide å drikke et glass vann!', 'water');
-        sendNotification('💧 Vannpåminnelse', 'Husk å drikke et glass vann!', 'water');
+        if (shouldUseLocalNotificationFallback()) {
+            sendNotification('💧 Vannpåminnelse', 'Husk å drikke et glass vann!', 'water');
+        }
         lastWaterReminder = now;
     }
 }
@@ -2177,7 +2185,9 @@ function checkMedicineReminder() {
                 if (!alreadyTaken) {
                     if (shouldSuppressDuplicateReminder('medicine')) return;
                     showReminderToast('💊', `Tid for ${med.name}! (${med.dosage || ''})`, 'medicine');
-                    sendNotification('💊 Medisinpåminnelse', `Tid for ${med.name}!`, 'medicine');
+                    if (shouldUseLocalNotificationFallback()) {
+                        sendNotification('💊 Medisinpåminnelse', `Tid for ${med.name}!`, 'medicine');
+                    }
                 }
             }
         });
@@ -2192,7 +2202,9 @@ function checkMovementReminder() {
     if (now - lastMovementReminder >= intervalMs) {
         if (shouldSuppressDuplicateReminder('movement')) return;
         showReminderToast('🚶', 'Tid for litt bevegelse! Rør litt på deg.', 'movement');
-        sendNotification('🚶 Bevegelsespåminnelse', 'Tid for å røre litt på deg!', 'movement');
+        if (shouldUseLocalNotificationFallback()) {
+            sendNotification('🚶 Bevegelsespåminnelse', 'Tid for å røre litt på deg!', 'movement');
+        }
         lastMovementReminder = now;
     }
 }
@@ -2207,7 +2219,9 @@ function checkCheckinReminder() {
     if (currentTime === checkinTime) {
         if (shouldSuppressDuplicateReminder('checkin')) return;
         showReminderToast('🌅', 'God morgen! Husk å sjekke inn.', 'checkin');
-        sendNotification('🌅 God morgen!', 'Husk å gjøre din daglige innsjekk.', 'checkin');
+        if (shouldUseLocalNotificationFallback()) {
+            sendNotification('🌅 God morgen!', 'Husk å gjøre din daglige innsjekk.', 'checkin');
+        }
     }
 }
 
