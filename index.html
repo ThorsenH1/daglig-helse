@@ -161,6 +161,9 @@
                     <button class="btn btn-more-menu" onclick="showView('emergency')">
                         🆘 Nødkontakter
                     </button>
+                    <button class="btn btn-more-menu" onclick="showView('friends')">
+                        👥 Venner
+                    </button>
                     <button class="btn btn-more-menu" id="btn-admin" onclick="showView('admin')" style="display:none;">
                         👑 Admin
                     </button>
@@ -523,6 +526,76 @@
             </div>
         </section>
 
+        <!-- ============ VENNER ============ -->
+        <section id="friends-view" class="view app-view" style="display:none;">
+            <div class="view-header">
+                <button class="btn-back" onclick="showView('home')">← Tilbake</button>
+                <h1>👥 Venner</h1>
+            </div>
+            <div class="view-content">
+                <!-- Legg til venn -->
+                <div class="settings-section">
+                    <h3>➕ Legg til venn</h3>
+                    <p style="margin-bottom:10px;">Skriv inn e-postadressen til personen du vil bli venn med:</p>
+                    <input type="email" id="friend-email-input" class="input-large" placeholder="ola@example.com">
+                    <button class="btn btn-medicine-add" onclick="sendFriendRequest()" style="margin-top:10px;">
+                        📨 Send venneforespørsel
+                    </button>
+                </div>
+
+                <!-- Innkommende forespørsler -->
+                <div class="settings-section">
+                    <h3>📬 Venneforespørsler</h3>
+                    <div id="friend-requests-list">
+                        <p class="empty-state">Ingen ventende forespørsler</p>
+                    </div>
+                </div>
+
+                <!-- Mine venner -->
+                <div class="settings-section">
+                    <h3>❤️ Mine venner</h3>
+                    <div id="friends-list">
+                        <p class="empty-state">Du har ingen venner ennå. Send en venneforespørsel over!</p>
+                    </div>
+                </div>
+
+                <!-- Utgående forespørsler -->
+                <div class="settings-section">
+                    <h3>📤 Sendte forespørsler</h3>
+                    <div id="sent-requests-list">
+                        <p class="empty-state">Ingen sendte forespørsler</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ VENNENS DASHBOARD ============ -->
+        <section id="friend-dashboard-view" class="view app-view" style="display:none;">
+            <div class="view-header">
+                <button class="btn-back" onclick="showView('friends')">← Tilbake</button>
+                <h1 id="friend-dashboard-title">👤 Venn</h1>
+            </div>
+            <div class="view-content">
+                <div id="friend-dashboard-content">
+                    <p class="empty-state">Laster...</p>
+                </div>
+                <div class="settings-section" style="margin-top:20px;">
+                    <h3>📣 Send påminnelse</h3>
+                    <p style="margin-bottom:10px;">Send en vennlig påminnelse:</p>
+                    <div class="friend-reminder-buttons" id="friend-reminder-buttons">
+                        <button class="btn btn-quick" onclick="sendFriendReminder('water')">💧 Drikk vann</button>
+                        <button class="btn btn-quick" onclick="sendFriendReminder('medicine')">💊 Ta medisin</button>
+                        <button class="btn btn-quick" onclick="sendFriendReminder('movement')">🚶 Beveg deg</button>
+                        <button class="btn btn-quick" onclick="sendFriendReminder('checkin')">🌅 Sjekk inn</button>
+                    </div>
+                    <input type="text" id="friend-custom-reminder" class="input-large" placeholder="Skriv egen melding..." style="margin-top:10px;">
+                    <button class="btn btn-save-health" onclick="sendFriendReminder('custom')" style="margin-top:10px;">
+                        📨 Send egendefinert påminnelse
+                    </button>
+                </div>
+            </div>
+        </section>
+
         <!-- ============ INNSTILLINGER ============ -->
         <section id="settings-view" class="view app-view" style="display:none;">
             <div class="view-header">
@@ -744,6 +817,33 @@
             <div class="toast-actions">
                 <button class="btn btn-toast" onclick="dismissReminder()">OK, forstått!</button>
                 <button class="btn btn-toast btn-toast-action" id="toast-action-btn" onclick="handleReminderAction()" style="display:none;">Registrer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vennetillatelser-modal -->
+    <div id="modal-friend-permissions" class="modal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🔒 Tillatelser</h2>
+                <button class="btn-close-modal" onclick="closeModal('modal-friend-permissions')">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom:15px;">Velg hva <strong id="perm-friend-name">denne vennen</strong> kan se:</p>
+                <div class="perm-toggles">
+                    <div class="toggle-row"><input type="checkbox" id="perm-water" class="toggle-input"><label for="perm-water" class="toggle-label">💧 Vanninntak</label></div>
+                    <div class="toggle-row"><input type="checkbox" id="perm-medicine" class="toggle-input"><label for="perm-medicine" class="toggle-label">💊 Medisin</label></div>
+                    <div class="toggle-row"><input type="checkbox" id="perm-bathroom" class="toggle-input"><label for="perm-bathroom" class="toggle-label">🚽 Toalettlogg</label></div>
+                    <div class="toggle-row"><input type="checkbox" id="perm-health" class="toggle-input"><label for="perm-health" class="toggle-label">❤️ Helse</label></div>
+                    <div class="toggle-row"><input type="checkbox" id="perm-sleep" class="toggle-input"><label for="perm-sleep" class="toggle-label">😴 Søvn</label></div>
+                    <div class="toggle-row"><input type="checkbox" id="perm-movement" class="toggle-input"><label for="perm-movement" class="toggle-label">🚶 Bevegelse</label></div>
+                    <div class="toggle-row"><input type="checkbox" id="perm-diary" class="toggle-input"><label for="perm-diary" class="toggle-label">📝 Dagbok</label></div>
+                    <div class="toggle-row"><input type="checkbox" id="perm-checkin" class="toggle-input"><label for="perm-checkin" class="toggle-label">✅ Innsjekk</label></div>
+                    <div class="toggle-row"><input type="checkbox" id="perm-sendReminder" class="toggle-input"><label for="perm-sendReminder" class="toggle-label">📣 Kan sende meg påminnelser</label></div>
+                </div>
+                <button class="btn btn-save-health" onclick="saveFriendPermissions()" style="margin-top:20px;">
+                    💾 Lagre tillatelser
+                </button>
             </div>
         </div>
     </div>

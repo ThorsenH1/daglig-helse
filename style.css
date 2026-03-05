@@ -1721,6 +1721,140 @@ label {
     animation: slideUp 0.3s ease;
 }
 
+/* ---- Venner ---- */
+.friend-request-card,
+.friend-card {
+    background: var(--color-bg-card);
+    border-radius: var(--card-radius);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+    box-shadow: 0 2px 8px var(--color-shadow);
+}
+
+.friend-request-info,
+.friend-card-info {
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.friend-request-name,
+.friend-card-name {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.friend-request-email,
+.friend-card-email {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.friend-request-actions,
+.friend-card-actions {
+    display: flex;
+    gap: var(--spacing-xs);
+    flex-shrink: 0;
+}
+
+.btn-accept-friend {
+    background: var(--color-success);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    cursor: pointer;
+    min-height: 44px;
+}
+
+.btn-reject-friend {
+    background: var(--color-danger-light);
+    color: var(--color-danger);
+    border: 2px solid var(--color-danger);
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    cursor: pointer;
+    min-height: 44px;
+}
+
+.btn-danger-small {
+    background: var(--color-danger-light) !important;
+    color: var(--color-danger) !important;
+    border: 1px solid var(--color-danger) !important;
+}
+
+.friend-data-card {
+    background: var(--color-bg-card);
+    border-radius: var(--card-radius);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+    box-shadow: 0 2px 8px var(--color-shadow);
+}
+
+.friend-data-card h3 {
+    font-size: var(--font-size-lg);
+    margin-bottom: var(--spacing-xs);
+}
+
+.friend-data-value {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-xs);
+}
+
+.friend-data-detail {
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+    padding: 4px 0;
+}
+
+.friend-no-access {
+    background: var(--color-warning-light);
+    border-radius: var(--card-radius);
+    padding: var(--spacing-lg);
+    text-align: center;
+}
+
+.friend-no-access p {
+    font-size: var(--font-size-lg);
+    color: var(--color-text);
+}
+
+.friend-reminder-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+}
+
+.perm-toggles {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.perm-toggles .toggle-row {
+    background: var(--color-bg-card);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: 12px;
+    border: 1px solid var(--color-border);
+}
+
 /* ---- Responsive ---- */
 @media (max-width: 400px) {
     .summary-grid {

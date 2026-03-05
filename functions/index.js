@@ -7,6 +7,7 @@
  */
 
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
@@ -501,5 +502,53 @@ exports.checkinReminder = onSchedule(
         }
 
         console.log(`[checkinReminder] Ferdig. Sendt til ${totalSent} brukere.`);
+    }
+);
+
+
+// =============================================
+// VENNEVARSEL – Trigges når noen skriver til friendReminders
+// =============================================
+exports.sendFriendReminder = onDocumentCreated(
+    {
+        document: "friendReminders/{reminderId}",
+        region: "europe-west1",
+        memory: "256MiB"
+    },
+    async (event) => {
+        const data = event.data?.data();
+        if (!data) return;
+
+        const { toUid, fromUid, fromName, title, body, type } = data;
+
+        if (!toUid || !title || !body) {
+            console.warn("[friendReminder] Mangler toUid, title eller body");
+            return;
+        }
+
+        // Sjekk at avsender faktisk har tillatelse
+        const friendDoc = await db.collection('users').doc(toUid)
+            .collection('friends').doc(fromUid).get();
+
+        if (!friendDoc.exists) {
+            console.warn(`[friendReminder] ${fromUid} er ikke venn av ${toUid}`);
+            return;
+        }
+
+        const perms = friendDoc.data().permissions || {};
+        if (!perms.sendReminder) {
+            console.warn(`[friendReminder] ${fromUid} har ikke tillatelse til å sende varsler til ${toUid}`);
+            return;
+        }
+
+        // Send push-varsel
+        const result = await sendPushToUser(toUid, title, body, 'friendReminder');
+        console.log(`[friendReminder] Sendt fra ${fromName || fromUid} til ${toUid}: ${result.success} suksess, ${result.failures} feil`);
+
+        // Marker som prosessert
+        await event.data.ref.update({
+            processed: true,
+            processedAt: FieldValue.serverTimestamp()
+        });
     }
 );

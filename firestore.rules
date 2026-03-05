@@ -18,6 +18,36 @@ service cloud.firestore {
         allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
         allow write: if request.auth != null && request.auth.uid == userId;
       }
+
+      // Venner: vennen kan lese sin egen profil og opprette seg selv (ved aksept)
+      match /friends/{friendUid} {
+        allow read: if request.auth != null && (request.auth.uid == userId || request.auth.uid == friendUid || isAdmin());
+        allow create: if request.auth != null && (request.auth.uid == userId || request.auth.uid == friendUid);
+        allow update, delete: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    
+    // Venneforespørsler: bruker kan lese/opprette sine egne
+    match /friendRequests/{requestId} {
+      allow create: if request.auth != null
+        && request.resource.data.fromUid == request.auth.uid;
+      allow read: if request.auth != null
+        && (resource.data.fromUid == request.auth.uid || resource.data.toEmail == request.auth.token.email);
+      allow update: if request.auth != null
+        && (resource.data.toEmail == request.auth.token.email || resource.data.fromUid == request.auth.uid);
+      allow delete: if request.auth != null
+        && (resource.data.fromUid == request.auth.uid || resource.data.toEmail == request.auth.token.email);
+    }
+    
+    // Vennevarsler: venner kan opprette varsler til hverandre
+    match /friendReminders/{reminderId} {
+      allow create: if request.auth != null
+        && request.resource.data.fromUid == request.auth.uid;
+      allow read: if request.auth != null
+        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+      allow update: if false;
+      allow delete: if request.auth != null
+        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
     }
     
     // Blokker alt annet

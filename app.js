@@ -343,7 +343,8 @@ async function loadAllData() {
             loadMedicines(),
             loadEmergencyContacts(),
             loadShoppingList(),
-            loadTodayData()
+            loadTodayData(),
+            loadFriendsData()
         ]);
         
         updateDashboard();
@@ -2370,6 +2371,555 @@ document.addEventListener('click', (e) => {
         e.target.style.display = 'none';
     }
 });
+
+// ==========================================
+// VENNER
+// ==========================================
+let friendsList = [];
+let friendRequests = [];
+let sentRequests = [];
+let currentFriendDashboardUid = null;
+let editingPermissionsFriendUid = null;
+
+// --- Send venneforespørsel ---
+async function sendFriendRequest() {
+    const emailInput = document.getElementById('friend-email-input');
+    const email = (emailInput.value || '').trim().toLowerCase();
+    
+    if (!email || !email.includes('@')) {
+        showConfirm('❌ Skriv inn en gyldig e-postadresse');
+        return;
+    }
+    
+    if (email === (currentUser.email || '').toLowerCase()) {
+        showConfirm('❌ Du kan ikke sende forespørsel til deg selv');
+        return;
+    }
+    
+    // Sjekk om allerede venn
+    const existingFriend = friendsList.find(f => f.friendEmail === email);
+    if (existingFriend) {
+        showConfirm('ℹ️ Dere er allerede venner!');
+        return;
+    }
+    
+    // Sjekk om forespørsel allerede finnes
+    const existing = await db.collection('friendRequests')
+        .where('fromUid', '==', currentUser.uid)
+        .where('toEmail', '==', email)
+        .where('status', '==', 'pending')
+        .get();
+    
+    if (!existing.empty) {
+        showConfirm('ℹ️ Du har allerede sendt en forespørsel til denne personen');
+        return;
+    }
+    
+    await db.collection('friendRequests').add({
+        fromUid: currentUser.uid,
+        fromEmail: currentUser.email,
+        fromName: settings.name || currentUser.displayName || currentUser.email,
+        toEmail: email,
+        status: 'pending',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    emailInput.value = '';
+    showConfirm('✅ Venneforespørsel sendt!');
+    loadFriendsData();
+}
+
+// --- Last all vennedata ---
+async function loadFriendsData() {
+    if (!currentUser || !db) return;
+    
+    await Promise.all([
+        loadFriendsList(),
+        loadFriendRequests(),
+        loadSentRequests()
+    ]);
+    
+    if (currentView === 'friends') {
+        renderFriendsView();
+    }
+}
+
+async function loadFriendsList() {
+    const ref = getUserRef();
+    if (!ref) return;
+    
+    const snapshot = await ref.collection('friends').get();
+    friendsList = [];
+    snapshot.forEach(doc => {
+        friendsList.push({ friendUid: doc.id, ...doc.data() });
+    });
+}
+
+async function loadFriendRequests() {
+    if (!currentUser) return;
+    
+    const snapshot = await db.collection('friendRequests')
+        .where('toEmail', '==', currentUser.email.toLowerCase())
+        .where('status', '==', 'pending')
+        .get();
+    
+    friendRequests = [];
+    snapshot.forEach(doc => {
+        friendRequests.push({ id: doc.id, ...doc.data() });
+    });
+}
+
+async function loadSentRequests() {
+    if (!currentUser) return;
+    
+    const snapshot = await db.collection('friendRequests')
+        .where('fromUid', '==', currentUser.uid)
+        .where('status', '==', 'pending')
+        .get();
+    
+    sentRequests = [];
+    snapshot.forEach(doc => {
+        sentRequests.push({ id: doc.id, ...doc.data() });
+    });
+}
+
+// --- Aksepter venneforespørsel ---
+async function acceptFriendRequest(requestId) {
+    const request = friendRequests.find(r => r.id === requestId);
+    if (!request) return;
+    
+    // Oppdater forespørsel-status
+    await db.collection('friendRequests').doc(requestId).update({
+        status: 'accepted',
+        acceptedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    const myName = settings.name || currentUser.displayName || currentUser.email;
+    
+    // Legg til venn hos meg (med standard tillatelser: alt av)
+    const defaultPermissions = {
+        water: false, medicine: false, bathroom: false, health: false,
+        sleep: false, movement: false, diary: false, checkin: false,
+        sendReminder: false
+    };
+    
+    await getUserRef().collection('friends').doc(request.fromUid).set({
+        friendEmail: request.fromEmail,
+        friendName: request.fromName || request.fromEmail,
+        permissions: defaultPermissions,
+        addedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    // Legg til meg hos avsenderen
+    await db.collection('users').doc(request.fromUid).collection('friends').doc(currentUser.uid).set({
+        friendEmail: currentUser.email,
+        friendName: myName,
+        permissions: defaultPermissions,
+        addedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    showConfirm('✅ Dere er nå venner!');
+    loadFriendsData();
+}
+
+// --- Avslå venneforespørsel ---
+async function rejectFriendRequest(requestId) {
+    await db.collection('friendRequests').doc(requestId).update({
+        status: 'rejected'
+    });
+    showConfirm('Forespørsel avslått');
+    loadFriendsData();
+}
+
+// --- Kanseller sendt forespørsel ---
+async function cancelFriendRequest(requestId) {
+    await db.collection('friendRequests').doc(requestId).delete();
+    showConfirm('Forespørsel trukket tilbake');
+    loadFriendsData();
+}
+
+// --- Fjern venn ---
+async function removeFriend(friendUid) {
+    if (!confirm('Er du sikker på at du vil fjerne denne vennen?')) return;
+    
+    await getUserRef().collection('friends').doc(friendUid).delete();
+    
+    // Fjern meg fra vennens liste også
+    try {
+        await db.collection('users').doc(friendUid).collection('friends').doc(currentUser.uid).delete();
+    } catch (e) {
+        console.warn('Kunne ikke fjerne fra vennens liste:', e);
+    }
+    
+    showConfirm('Venn fjernet');
+    loadFriendsData();
+}
+
+// --- Render venner-view ---
+function renderFriendsView() {
+    // Innkommende forespørsler
+    const requestsContainer = document.getElementById('friend-requests-list');
+    if (friendRequests.length === 0) {
+        requestsContainer.innerHTML = '<p class="empty-state">Ingen ventende forespørsler</p>';
+    } else {
+        requestsContainer.innerHTML = friendRequests.map(r => `
+            <div class="friend-request-card">
+                <div class="friend-request-info">
+                    <div class="friend-request-name">${escapeHtml(r.fromName || r.fromEmail)}</div>
+                    <div class="friend-request-email">${escapeHtml(r.fromEmail)}</div>
+                </div>
+                <div class="friend-request-actions">
+                    <button class="btn btn-accept-friend" onclick="acceptFriendRequest('${r.id}')">✅ Godta</button>
+                    <button class="btn btn-reject-friend" onclick="rejectFriendRequest('${r.id}')">❌ Avslå</button>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    // Mine venner
+    const friendsContainer = document.getElementById('friends-list');
+    if (friendsList.length === 0) {
+        friendsContainer.innerHTML = '<p class="empty-state">Du har ingen venner ennå. Send en venneforespørsel over!</p>';
+    } else {
+        friendsContainer.innerHTML = friendsList.map(f => `
+            <div class="friend-card">
+                <div class="friend-card-info" onclick="openFriendDashboard('${f.friendUid}')">
+                    <div class="friend-card-name">${escapeHtml(f.friendName || f.friendEmail)}</div>
+                    <div class="friend-card-email">${escapeHtml(f.friendEmail)}</div>
+                </div>
+                <div class="friend-card-actions">
+                    <button class="btn btn-small" onclick="openPermissionsModal('${f.friendUid}')" title="Tillatelser">🔒</button>
+                    <button class="btn btn-small btn-danger-small" onclick="removeFriend('${f.friendUid}')" title="Fjern venn">🗑️</button>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    // Sendte forespørsler
+    const sentContainer = document.getElementById('sent-requests-list');
+    if (sentRequests.length === 0) {
+        sentContainer.innerHTML = '<p class="empty-state">Ingen sendte forespørsler</p>';
+    } else {
+        sentContainer.innerHTML = sentRequests.map(r => `
+            <div class="friend-request-card">
+                <div class="friend-request-info">
+                    <div class="friend-request-name">Til: ${escapeHtml(r.toEmail)}</div>
+                    <div class="friend-request-email">Venter på svar...</div>
+                </div>
+                <div class="friend-request-actions">
+                    <button class="btn btn-small btn-danger-small" onclick="cancelFriendRequest('${r.id}')">❌ Avbryt</button>
+                </div>
+            </div>
+        `).join('');
+    }
+}
+
+// --- Tillatelser-modal ---
+function openPermissionsModal(friendUid) {
+    editingPermissionsFriendUid = friendUid;
+    const friend = friendsList.find(f => f.friendUid === friendUid);
+    if (!friend) return;
+    
+    document.getElementById('perm-friend-name').textContent = friend.friendName || friend.friendEmail;
+    
+    const perms = friend.permissions || {};
+    document.getElementById('perm-water').checked = !!perms.water;
+    document.getElementById('perm-medicine').checked = !!perms.medicine;
+    document.getElementById('perm-bathroom').checked = !!perms.bathroom;
+    document.getElementById('perm-health').checked = !!perms.health;
+    document.getElementById('perm-sleep').checked = !!perms.sleep;
+    document.getElementById('perm-movement').checked = !!perms.movement;
+    document.getElementById('perm-diary').checked = !!perms.diary;
+    document.getElementById('perm-checkin').checked = !!perms.checkin;
+    document.getElementById('perm-sendReminder').checked = !!perms.sendReminder;
+    
+    document.getElementById('modal-friend-permissions').style.display = 'flex';
+}
+
+async function saveFriendPermissions() {
+    if (!editingPermissionsFriendUid) return;
+    
+    const permissions = {
+        water: document.getElementById('perm-water').checked,
+        medicine: document.getElementById('perm-medicine').checked,
+        bathroom: document.getElementById('perm-bathroom').checked,
+        health: document.getElementById('perm-health').checked,
+        sleep: document.getElementById('perm-sleep').checked,
+        movement: document.getElementById('perm-movement').checked,
+        diary: document.getElementById('perm-diary').checked,
+        checkin: document.getElementById('perm-checkin').checked,
+        sendReminder: document.getElementById('perm-sendReminder').checked
+    };
+    
+    await getUserRef().collection('friends').doc(editingPermissionsFriendUid).update({
+        permissions: permissions
+    });
+    
+    // Oppdater lokal liste
+    const friend = friendsList.find(f => f.friendUid === editingPermissionsFriendUid);
+    if (friend) friend.permissions = permissions;
+    
+    closeModal('modal-friend-permissions');
+    showConfirm('✅ Tillatelser lagret!');
+    renderFriendsView();
+}
+
+// --- Vennens dashboard ---
+async function openFriendDashboard(friendUid) {
+    currentFriendDashboardUid = friendUid;
+    const friend = friendsList.find(f => f.friendUid === friendUid);
+    if (!friend) return;
+    
+    document.getElementById('friend-dashboard-title').textContent = `👤 ${friend.friendName || friend.friendEmail}`;
+    document.getElementById('friend-dashboard-content').innerHTML = '<p class="empty-state">Laster data...</p>';
+    
+    showView('friend-dashboard');
+    
+    // Hent hva vennen har gitt OSS tillatelse til å se
+    let theirPermissions = {};
+    try {
+        const theirFriendDoc = await db.collection('users').doc(friendUid)
+            .collection('friends').doc(currentUser.uid).get();
+        if (theirFriendDoc.exists) {
+            theirPermissions = theirFriendDoc.data().permissions || {};
+        }
+    } catch (e) {
+        console.warn('Kunne ikke lese vennens tillatelser:', e);
+    }
+    
+    const today = getTodayString();
+    let html = '';
+    
+    // Sjekk om vennen har gitt oss noen tillatelser
+    const hasAnyPermission = Object.values(theirPermissions).some(v => v === true);
+    
+    if (!hasAnyPermission) {
+        html = '<div class="friend-no-access"><p>🔒 Denne vennen har ikke delt noen data med deg ennå.</p></div>';
+    } else {
+        const friendRef = db.collection('users').doc(friendUid);
+        
+        // Vanninntak
+        if (theirPermissions.water) {
+            try {
+                const waterDoc = await friendRef.collection('waterLogs').doc(today).get();
+                const waterCount = waterDoc.exists ? (waterDoc.data().count || 0) : 0;
+                const friendSettings = (await friendRef.get()).data()?.settings || {};
+                const waterGoal = friendSettings.waterGoal || 8;
+                const pct = Math.min(100, Math.round((waterCount / waterGoal) * 100));
+                html += `
+                    <div class="friend-data-card">
+                        <h3>💧 Vanninntak</h3>
+                        <div class="friend-data-value">${waterCount} av ${waterGoal} glass</div>
+                        <div class="progress-bar-large"><div class="progress-fill" style="width:${pct}%"></div></div>
+                    </div>`;
+            } catch (e) { console.warn('Ingen tilgang til vanndata:', e); }
+        }
+        
+        // Medisin
+        if (theirPermissions.medicine) {
+            try {
+                const medLogDoc = await friendRef.collection('medicineLogs').doc(today).get();
+                const taken = medLogDoc.exists ? (medLogDoc.data().taken || []) : [];
+                const medSnap = await friendRef.collection('medicines').get();
+                let totalMeds = 0;
+                let totalDoses = 0;
+                medSnap.forEach(doc => {
+                    const m = doc.data();
+                    if (m.active !== false) totalDoses += (m.times || []).length;
+                    totalMeds++;
+                });
+                html += `
+                    <div class="friend-data-card">
+                        <h3>💊 Medisin</h3>
+                        <div class="friend-data-value">${taken.length} av ${totalDoses} doser tatt i dag</div>
+                    </div>`;
+            } catch (e) { console.warn('Ingen tilgang til medisindata:', e); }
+        }
+        
+        // Toalettlogg
+        if (theirPermissions.bathroom) {
+            try {
+                const bathDoc = await friendRef.collection('bathroomLogs').doc(today).get();
+                const logs = bathDoc.exists ? (bathDoc.data().logs || []) : [];
+                const lastTime = logs.length > 0 ? logs[logs.length - 1].time : 'Ingen i dag';
+                html += `
+                    <div class="friend-data-card">
+                        <h3>🚽 Toalettlogg</h3>
+                        <div class="friend-data-value">${logs.length} besøk i dag</div>
+                        <div class="friend-data-detail">Siste: ${lastTime}</div>
+                    </div>`;
+            } catch (e) { console.warn('Ingen tilgang til toalettdata:', e); }
+        }
+        
+        // Helse
+        if (theirPermissions.health) {
+            try {
+                const healthDoc = await friendRef.collection('healthLogs').doc(today).get();
+                if (healthDoc.exists) {
+                    const d = healthDoc.data();
+                    const moodLabels = { 'veldig_bra': '😄 Veldig bra', 'bra': '🙂 Bra', 'ok': '😐 OK', 'darlig': '😟 Dårlig', 'veldig_darlig': '😢 Veldig dårlig' };
+                    html += `
+                        <div class="friend-data-card">
+                            <h3>❤️ Helse</h3>
+                            ${d.mood ? `<div class="friend-data-detail">Humør: ${moodLabels[d.mood] || d.mood}</div>` : ''}
+                            ${d.pain != null ? `<div class="friend-data-detail">Smerte: ${d.pain}/10</div>` : ''}
+                            ${d.bpSys ? `<div class="friend-data-detail">Blodtrykk: ${d.bpSys}/${d.bpDia}</div>` : ''}
+                            ${d.pulse ? `<div class="friend-data-detail">Puls: ${d.pulse} bpm</div>` : ''}
+                        </div>`;
+                } else {
+                    html += '<div class="friend-data-card"><h3>❤️ Helse</h3><div class="friend-data-detail">Ikke registrert i dag</div></div>';
+                }
+            } catch (e) { console.warn('Ingen tilgang til helsedata:', e); }
+        }
+        
+        // Søvn
+        if (theirPermissions.sleep) {
+            try {
+                const sleepDoc = await friendRef.collection('sleepLogs').doc(today).get();
+                if (sleepDoc.exists) {
+                    const d = sleepDoc.data();
+                    html += `
+                        <div class="friend-data-card">
+                            <h3>😴 Søvn</h3>
+                            <div class="friend-data-detail">Leggetid: ${d.bedtime || '?'} → Våknetid: ${d.waketime || '?'}</div>
+                        </div>`;
+                } else {
+                    html += '<div class="friend-data-card"><h3>😴 Søvn</h3><div class="friend-data-detail">Ikke registrert i dag</div></div>';
+                }
+            } catch (e) { console.warn('Ingen tilgang til søvndata:', e); }
+        }
+        
+        // Bevegelse
+        if (theirPermissions.movement) {
+            try {
+                const moveDoc = await friendRef.collection('movementLogs').doc(today).get();
+                if (moveDoc.exists) {
+                    const activities = moveDoc.data().activities || [];
+                    html += `
+                        <div class="friend-data-card">
+                            <h3>🚶 Bevegelse</h3>
+                            ${activities.length > 0
+                                ? activities.map(a => `<div class="friend-data-detail">${escapeHtml(a.name)}: ${a.duration} min</div>`).join('')
+                                : '<div class="friend-data-detail">Ingen aktiviteter i dag</div>'
+                            }
+                        </div>`;
+                } else {
+                    html += '<div class="friend-data-card"><h3>🚶 Bevegelse</h3><div class="friend-data-detail">Ikke registrert i dag</div></div>';
+                }
+            } catch (e) { console.warn('Ingen tilgang til bevegelsesdata:', e); }
+        }
+        
+        // Dagbok
+        if (theirPermissions.diary) {
+            try {
+                const diaryDoc = await friendRef.collection('diaryLogs').doc(today).get();
+                if (diaryDoc.exists && diaryDoc.data().text) {
+                    html += `
+                        <div class="friend-data-card">
+                            <h3>📝 Dagbok</h3>
+                            <div class="friend-data-detail" style="white-space:pre-wrap;">${escapeHtml(diaryDoc.data().text)}</div>
+                        </div>`;
+                } else {
+                    html += '<div class="friend-data-card"><h3>📝 Dagbok</h3><div class="friend-data-detail">Ingen innlegg i dag</div></div>';
+                }
+            } catch (e) { console.warn('Ingen tilgang til dagbokdata:', e); }
+        }
+        
+        // Innsjekk
+        if (theirPermissions.checkin) {
+            try {
+                const checkinDoc = await friendRef.collection('checkins').doc(today).get();
+                html += `
+                    <div class="friend-data-card">
+                        <h3>✅ Daglig innsjekk</h3>
+                        <div class="friend-data-value">${checkinDoc.exists ? `Sjekket inn kl. ${checkinDoc.data().time}` : '❌ Ikke sjekket inn ennå i dag'}</div>
+                    </div>`;
+            } catch (e) { console.warn('Ingen tilgang til innsjekkdata:', e); }
+        }
+    }
+    
+    document.getElementById('friend-dashboard-content').innerHTML = html || '<p class="empty-state">Ingen delt data tilgjengelig</p>';
+    
+    // Vis/skjul påminnelsesknapper basert på om vi har lov
+    const reminderSection = document.getElementById('friend-reminder-buttons');
+    if (reminderSection) {
+        reminderSection.style.display = theirPermissions.sendReminder ? 'flex' : 'none';
+        document.getElementById('friend-custom-reminder').style.display = theirPermissions.sendReminder ? 'block' : 'none';
+        // Skjul send-knappen også
+        const sendBtn = document.querySelector('#friend-dashboard-view .btn-save-health');
+        if (sendBtn) sendBtn.style.display = theirPermissions.sendReminder ? 'block' : 'none';
+    }
+}
+
+// --- Send påminnelse til venn ---
+async function sendFriendReminder(type) {
+    if (!currentFriendDashboardUid) return;
+    
+    const friend = friendsList.find(f => f.friendUid === currentFriendDashboardUid);
+    if (!friend) return;
+    
+    let title = '';
+    let body = '';
+    const myName = settings.name || currentUser.displayName || currentUser.email;
+    
+    switch (type) {
+        case 'water':
+            title = '💧 Påminnelse fra ' + myName;
+            body = 'Husk å drikke et glass vann!';
+            break;
+        case 'medicine':
+            title = '💊 Påminnelse fra ' + myName;
+            body = 'Husk å ta medisinen din!';
+            break;
+        case 'movement':
+            title = '🚶 Påminnelse fra ' + myName;
+            body = 'Tid for litt bevegelse! Rør litt på deg.';
+            break;
+        case 'checkin':
+            title = '🌅 Påminnelse fra ' + myName;
+            body = 'Husk å sjekke inn i dag!';
+            break;
+        case 'custom':
+            const customMsg = document.getElementById('friend-custom-reminder').value.trim();
+            if (!customMsg) {
+                showConfirm('❌ Skriv en melding først');
+                return;
+            }
+            title = '💬 Melding fra ' + myName;
+            body = customMsg;
+            break;
+        default:
+            return;
+    }
+    
+    await db.collection('friendReminders').add({
+        fromUid: currentUser.uid,
+        fromEmail: currentUser.email,
+        fromName: myName,
+        toUid: currentFriendDashboardUid,
+        toEmail: friend.friendEmail,
+        title: title,
+        body: body,
+        type: type,
+        processed: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    if (type === 'custom') {
+        document.getElementById('friend-custom-reminder').value = '';
+    }
+    
+    showConfirm('✅ Påminnelse sendt!');
+}
+
+// Legg friends-view i showView switch
+const _originalShowView = showView;
+showView = function(viewName) {
+    _originalShowView(viewName);
+    if (viewName === 'friends') {
+        loadFriendsData();
+    }
+};
 
 // ==========================================
 // SERVICE WORKER
