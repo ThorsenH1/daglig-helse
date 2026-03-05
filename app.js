@@ -72,6 +72,8 @@ let lastReminderShown = {
 // Firebase Cloud Messaging
 let messaging = null;
 let fcmToken = null;
+const FCM_TOKEN_STORAGE_KEY = 'dagligHelse_fcmToken';
+const FCM_TOKEN_UPDATED_STORAGE_KEY = 'dagligHelse_fcmTokenUpdatedAt';
 
 // ==========================================
 // INITIALISERING
@@ -81,6 +83,12 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initApp() {
+    // Bruk sist kjente token ved oppstart for å unngå lokal + sky samtidig.
+    const cachedToken = localStorage.getItem(FCM_TOKEN_STORAGE_KEY);
+    if (cachedToken) {
+        fcmToken = cachedToken;
+    }
+
     // Initialiser Firebase
     if (typeof firebase !== 'undefined' && typeof firebaseConfig !== 'undefined') {
         firebase.initializeApp(firebaseConfig);
@@ -1776,7 +1784,7 @@ function updatePushStatus() {
         if (isPWA) {
             html += '<div class="push-status-item push-status-ok">✅ Appen er installert på hjemskjermen</div>';
         } else {
-            html += '<div class="push-status-item push-status-warning">⚠️ <strong>iPhone:</strong> For å motta varsler MÅ du legge appen til hjemskjermen. Trykk på <strong>Del-ikonet</strong> (firkant med pil opp) → <strong>"Legg til på Hjem-skjerm"</strong></div>';
+            html += '<div class="push-status-item push-status-warning">⚠️ <strong>iPhone:</strong> Push-varsler virker kun når appen er lagt på hjemskjermen. Slik gjør du det: 1) Trykk <strong>Del</strong> i Safari, 2) Velg <strong>Legg til på Hjem-skjerm</strong>, 3) Åpne app-ikonet fra hjemskjermen.</div>';
         }
     }
     
@@ -1972,6 +1980,14 @@ async function requestNotificationPermission() {
 
 async function registerFCMToken() {
     if (!messaging || !currentUser) return;
+
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+    if (isIOS && !isStandalone) {
+        console.warn('[FCM] iOS krever at appen er installert på hjemskjermen før push-varsler kan aktiveres.');
+        return;
+    }
     
     // Sjekk at VAPID-nøkkel er satt
     if (!VAPID_KEY || VAPID_KEY === '__VAPID_KEY_HER__') {
@@ -1982,7 +1998,10 @@ async function registerFCMToken() {
     
     try {
         // Registrer FCM service worker
-        const swRegistration = await navigator.serviceWorker.register('firebase-messaging-sw.js?v=3.0.1', { updateViaCache: 'none' });
+        const swRegistration = await navigator.serviceWorker.register('firebase-messaging-sw.js?v=3.0.1', {
+            scope: './firebase-cloud-messaging-push-scope',
+            updateViaCache: 'none'
+        });
         await swRegistration.update();
         
         // Hent token
@@ -2019,6 +2038,8 @@ async function saveFCMToken(token) {
     
     const tokenId = token.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 120);
     await ref.collection('fcmTokens').doc(tokenId).set(deviceInfo);
+    localStorage.setItem(FCM_TOKEN_STORAGE_KEY, token);
+    localStorage.setItem(FCM_TOKEN_UPDATED_STORAGE_KEY, String(Date.now()));
     console.log('[FCM] Token lagret i Firestore');
 }
 
@@ -2150,8 +2171,15 @@ function shouldSuppressDuplicateReminder(type, windowMs = 90000) {
 
 function shouldUseLocalNotificationFallback() {
     const hasGrantedPermission = typeof Notification !== 'undefined' && Notification.permission === 'granted';
-    // Når FCM-token finnes og varsler er tillatt, lar vi sky-varsler være primær kanal.
-    return !(fcmToken && hasGrantedPermission);
+    const lastTokenUpdatedAt = Number(localStorage.getItem(FCM_TOKEN_UPDATED_STORAGE_KEY) || 0);
+    const hasRecentCachedFcm = (Date.now() - lastTokenUpdatedAt) < (48 * 60 * 60 * 1000);
+
+    // Når FCM er aktivt (eller nylig bekreftet), lar vi sky-varsler være primær kanal.
+    if (hasGrantedPermission && (fcmToken || hasRecentCachedFcm)) {
+        return false;
+    }
+
+    return true;
 }
 
 function checkWaterReminder() {

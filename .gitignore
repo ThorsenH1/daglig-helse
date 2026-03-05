@@ -5,3 +5,4 @@ package-lock.json
 .firebase/
 functions/node_modules/
 functions/package-lock.json
+besteforeldre-hjelper.agent.md

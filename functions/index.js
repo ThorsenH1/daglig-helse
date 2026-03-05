@@ -146,29 +146,12 @@ async function sendPushToUser(userId, title, body, type) {
         try {
             await messaging.send({
                 token: token,
-                notification: {
-                    title: title,
-                    body: body
-                },
                 data: {
                     type: type,
                     title: title,
                     body: body,
                     tag: `daglig-helse-${type}-${Date.now()}`,
                     url: APP_URL
-                },
-                webpush: {
-                    notification: {
-                        icon: './icons/icon-192.png',
-                        badge: './icons/icon-192.png',
-                        vibrate: [200, 100, 200, 100, 200],
-                        requireInteraction: true,
-                        tag: `daglig-helse-${type}`,
-                        renotify: true
-                    },
-                    fcmOptions: {
-                        link: APP_URL
-                    }
                 }
             });
             successCount++;
